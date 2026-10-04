@@ -1,7 +1,7 @@
 # Project Context — Student Review System
 
 ## Current Phase
-Phase 6: (to be defined)
+Phase 7: (to be defined)
 
 ## Completed Phases
 - Phase 0: Project Setup & Context Initialization — Vite + React (JavaScript) scaffold at project root, Tailwind CSS v4 configured (vite.config.js + src/index.css), shadcn/ui initialized (JavaScript mode), dependencies installed (@supabase/supabase-js, ts-fsrs, react-router-dom), `.env` placeholders, `src/` directory structure. Dev server verified (HTTP 200 on :5173); `npm run build` and `npm run lint` both pass.
@@ -12,8 +12,10 @@ Phase 6: (to be defined)
 
 - Phase 5: Analytics, Polish & Docs — installed `recharts` 3.10.1 + shadcn `skeleton` (local CLI), `src/hooks/useAnalytics.js` (two Supabase queries: `review_logs` with `card:cards(deck:decks(id, name))` embed + `cards(due, state)`; exported pure helpers `computeSummary`/`computeStreak`/`buildDueForecast`/`buildActivity`/`computeWeakDecks`; auto-fetch on mount with all setState inside promise callbacks), `src/pages/Analytics.jsx` (4 stat cards — retention / total reviews / streak / cards learned; 7-day due **BarChart**; 14-day review **LineChart**; weak decks list sorted lowest-accuracy-first, `<60%` shown destructive; Skeleton loading view; error box + Retry; empty state for every chart and list), `src/components/ErrorBoundary.jsx` (class component wrapping the router in `main.jsx`), Dashboard header (Analytics nav link + `flex-wrap`), route `/analytics` (ProtectedLayout), `README.md` written (overview, local setup, Supabase + RLS setup, AI provider keys, cron-job.org keep-alive + Edge Function alternative, Vercel deploy steps, free-tier limits table). Git repo initialized (`main`) with initial commit `9d57bac`; GitHub push + Vercel import left to the user (no `gh` CLI/credentials — see Key Decisions). Verified: lint, production build, 31-check smoke (13 helper unit checks incl. streak gaps/overdue clamping/weak ordering; SSR renders of Analytics skeleton, Dashboard nav, protected `/analytics` route, ErrorBoundary), `npm run dev` (HTTP 200, all new modules transform clean). NOT tested against a live Supabase DB or production deploy — see Known Risks.
 
+- Phase 6: Database Schema Repair (user-reported "Could not find the table 'public.decks' in the schema cache") — created `supabase/schema.sql` (full schema, verbatim per phase instructions: decks/cards/review_logs + 6 indexes + RLS enable + 11 policies with drop-if-exists; adds `check (rating between 1 and 4)` and different index/policy names than the Phase 1 migration) and `supabase/README.md` (SQL Editor steps, how to paste/run, 3 verification methods, separate-dev-project reminder, restart/redeploy notes). Verified `src/lib/supabase.js` reads `import.meta.env.VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` and both keys exist in `.env` — no code fix needed, no other app code touched. Live check against project `vlrtihujwdlmseifpmim` shows all three tables ALREADY EXIST (reachable via REST) — so if the error persists it is a wrong/missing `VITE_SUPABASE_*` var on Vercel, a different Supabase project, or a stale PostgREST schema cache (Dashboard → Settings → API → Reload schema), not missing tables.
+
 ## Next Phase
-Phase 6: (to be defined)
+Phase 7: (to be defined)
 
 ## Tech Stack (Locked)
 - Frontend: React 19 + Vite 8 (scaffolded via create-vite@latest on 2026-10-04; spec said Vite 7) + JavaScript (JSX, no TypeScript)
@@ -62,6 +64,7 @@ Phase 6: (to be defined)
 - Recharts styling: theme tokens directly — bars `fill="var(--chart-3)"`, line `stroke="var(--foreground)"`, Tooltip uses `--popover/--border` contentStyle; fixed-height wrapper divs (`h-56`) for `ResponsiveContainer`.
 - ErrorBoundary is a class component in `.jsx` (default export only) and wraps `BrowserRouter` in `main.jsx`; fallback offers "Try again" (reset) + "Reload page".
 - Git/deploy: repo initialized on branch `main` with initial commit `9d57bac` (staged set verified free of `.env`/`node_modules`/`dist`/logs). No remote configured and no `gh` CLI — GitHub push + Vercel import are the user's steps (README § Deploy to Vercel).
+- Phase 6 schema decision: `supabase/schema.sql` is now the file we tell users to run (verbatim SQL from phase instructions); `supabase/migrations/0001_initial_schema.sql` remains untouched and equivalent (same tables/columns/RLS semantics; only index names, policy names, and a `rating between 1 and 4` check differ). Running one after the other is harmless (`if not exists` + `drop policy if exists`).
 
 ## Known Risks / Watch Items
 - Supabase project pauses after 7 days of inactivity → add cron ping.
@@ -75,9 +78,10 @@ Phase 6: (to be defined)
 - Phase 4 AI generation is only verified with a mocked `fetch` (no real provider keys yet). Once a key exists, manually verify: real Gemini response parsing, live rate-limit → Groq → Cerebras fallback, and browser CORS when deployed to Vercel (Groq/Cerebras in-browser CORS is unverified — if blocked, the chain will surface a `network` error).
 - API keys in localStorage are readable by any script on the same origin — acceptable for this single-user free-tier app; never add third-party scripts/trackers to the origin.
 - Phase 5 analytics verified via helper unit checks + SSR only — NOT against a live Supabase DB. Once set up, manually verify: the `card:cards(deck:decks(id, name))` embed returns joined rows (weak-decks list populates), retention/streak match manual counts, due forecast matches the review queue, and the deck-less/empty-data states appear correctly.
-- Vercel deploy is PENDING user action (GitHub push + Vercel import + env vars). Production verification (auth → review flow) is blocked until the Supabase project exists and `.env`/Vercel env vars are set. Revisit when user does setup.
+- Vercel deploy: user reports the app is deployed and Supabase connected (2026-10-05). Production verification of the full auth → review → analytics flow still needs a manual walkthrough; confirm Vercel env vars were set before/at build.
 - Bundle: main chunk is ~1 MB minified (1,018 kB) after Recharts → Vite warns over 500 kB. Consider lazy-loading the `/analytics` route (`React.lazy`) as a future optimization; not required for correctness.
 - Supabase queries in `useAnalytics` fetch full `review_logs` (no pagination) — fine for free-tier scale, but if a user accumulates >1000 logs, analytics will silently undercount (Supabase default row cap).
+- "Could not find the table 'public.decks' in the schema cache" diagnostics (Phase 6): tables were verified EXISTING via REST in project `vlrtihujwdlmseifpmim` (2026-10-05). If the error still shows, check in order: (1) Vercel env vars `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` match the `.env` values and were present at build time, (2) the app isn't pointed at a different Supabase project, (3) reload the PostgREST schema cache (Dashboard → Settings → API → Reload schema).
 
 ## File Index
 - `AGENTS.md` — this file (project context)
@@ -87,7 +91,7 @@ Phase 6: (to be defined)
 - `vite.config.js` — Vite config (JavaScript, NOT .ts): react + tailwindcss plugins, `@` alias
 - `jsconfig.json` — `@/*` path mapping for editors and shadcn alias detection
 - `components.json` — shadcn/ui config (JavaScript mode)
-- `.env` — Supabase URL/anon-key placeholders (gitignored; empty until Supabase setup)
+- `.env` — Supabase URL/anon key (gitignored; filled with real credentials 2026-10-05, never committed)
 - `index.html` — Vite entry HTML (title: FastRev)
 - `src/index.css` — Tailwind v4 import + shadcn theme tokens (Geist font, CSS variables)
 - `src/main.jsx` — entry point: BrowserRouter + AuthProvider wrapping App
@@ -112,9 +116,12 @@ Phase 6: (to be defined)
 - `src/components/ErrorBoundary.jsx` — class error boundary wrapping the router (main.jsx)
 - `src/components/ui/` — shadcn components: alert-dialog.jsx, button.jsx, card.jsx, dialog.jsx, input.jsx, skeleton.jsx, tabs.jsx, textarea.jsx
 - `supabase/migrations/0001_initial_schema.sql` — decks/cards/review_logs tables + indexes + RLS policies (run in SQL Editor when Supabase project exists)
+- `supabase/schema.sql` — canonical run-me-now schema (Phase 6; verbatim SQL + rating check) — run in Supabase SQL Editor
+- `supabase/README.md` — step-by-step: open SQL Editor, paste schema.sql, verify tables, separate-dev-project note
 - `supabase/` — SQL migrations and edge functions (if any)
 
 ## Last Updated
+2026-10-05 — Phase 6 completed: supabase/schema.sql (verbatim full schema + RLS) + supabase/README.md (SQL Editor run/verify steps) created; supabase.js env-var names verified correct (`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` present in `.env`); no app code modified; live REST check confirms all three tables already exist in project `vlrtihujwdlmseifpmim` (stale-cache/env-var diagnostics added to Known Risks). `architecture.md` unchanged (schema tables/columns/policies it describes are identical).
 2026-10-05 — Phase 5 completed: recharts + skeleton installed, useAnalytics.js (two-query aggregation + tested pure helpers), Analytics.jsx (stat cards, BarChart forecast, LineChart activity, weak decks, skeleton/error/empty states), ErrorBoundary.jsx wrapping router, Dashboard Analytics nav + /analytics route, README.md (setup/Supabase/AI/cron/Vercel/free-tier docs), git repo initialized with initial commit `9d57bac` (push + Vercel import left to user); lint/build/31-check smoke/dev verified. `architecture.md` Component Map gained two entries (`useAnalytics.js`, `ErrorBoundary.jsx`) — the only change; `Analytics.jsx` was already listed.
 2026-10-05 — Phase 4 completed: ai.js (Gemini → Groq → Cerebras chain, AiError codes, localStorage key helpers, providerLabel), Settings.jsx (SettingsDialog/SettingsForm), Upload.jsx (deck select, generate, editable preview, save + toast + redirect, friendly errors), Dashboard nav (Generate Cards / Settings), `/upload` route; lint/build/27-check smoke/dev verified. `architecture.md` Component Map gained one entry (`src/pages/Settings.jsx`) — the only change; data flows already described this phase.
 2026-10-04 — Phase 3 completed: fsrs.js (scheduleCard/createEmptyCardFSRS/Rating), useReviews.js (due queue, due count, submitReview), Review.jsx session UI, Dashboard live count + Start Review, /review route, useCards wired to createEmptyCardFSRS; lint/build/SSR/dev verified. `architecture.md` unchanged (its Component Map + Review data flow already described these files).
