@@ -14,6 +14,8 @@ Phase 7: (to be defined)
 
 - Phase 6: Database Schema Repair (user-reported "Could not find the table 'public.decks' in the schema cache") — created `supabase/schema.sql` (full schema, verbatim per phase instructions: decks/cards/review_logs + 6 indexes + RLS enable + 11 policies with drop-if-exists; adds `check (rating between 1 and 4)` and different index/policy names than the Phase 1 migration) and `supabase/README.md` (SQL Editor steps, how to paste/run, 3 verification methods, separate-dev-project reminder, restart/redeploy notes). Verified `src/lib/supabase.js` reads `import.meta.env.VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` and both keys exist in `.env` — no code fix needed, no other app code touched. Live check against project `vlrtihujwdlmseifpmim` shows all three tables ALREADY EXIST (reachable via REST) — so if the error persists it is a wrong/missing `VITE_SUPABASE_*` var on Vercel, a different Supabase project, or a stale PostgREST schema cache (Dashboard → Settings → API → Reload schema), not missing tables.
 
+- Phase 6.5: Material Import (user request: "yes pdf, img and other possible input") — new `src/lib/extract.js` (`extractFromFile(file)` → `{ text, kind, meta }`, throws Error with `.code`) + `src/lib/ai.js` gains `transcribeImage(image, apiKeys)` (Gemini inlineData vision call, missing_key when no Gemini key) + `Upload.jsx` gains "Import file" button (hidden file input, accept `.pdf,.txt,.md,.markdown,.docx,image/*`), drag-and-drop onto the notes box, importing spinner, success caption, error box with Open Settings / Choose another file actions, supported-types hint. Formats: **PDF** → `pdfjs-dist@6` legacy build extracted **locally in the browser** (dynamic import, `?url` worker, `doc.destroy?.()` — v6 removed destroy), **images** (png/jpg/webp/heic) → Gemini vision transcription (costs Gemini quota), **`.docx`** → `mammoth@1.13` (dynamic import; passes both `{arrayBuffer}` for the browser build and `{buffer}` for the Node build), **`.txt/.md`** → `file.text()`; other types throw `unsupported`. Scanned/image-only PDFs return empty text → friendly "screenshot it and import as image" error. Verified: lint, build (pdfjs → lazy 488 kB chunk + worker asset, mammoth → lazy 308 kB, main only +6 kB), 11-check smoke (txt, unsupported throw, real PDF text extraction + page meta, real .docx built via ZipArchive with forward-slash entries, missing-key image path, LIVE Gemini image payload → HTTP 200, Upload SSR renders button/hint/accept).
+
 ## Next Phase
 Phase 7: (to be defined)
 
@@ -23,7 +25,7 @@ Phase 7: (to be defined)
 - UI Components: shadcn/ui (JavaScript mode)
 - Backend/DB: Supabase (PostgreSQL + Auth + RLS)
 - Spaced Repetition: ts-fsrs (FSRS) — imported as a compiled JS package
-- AI Card Generation: Google Gemini 2.5 Flash (free tier)
+- AI Card Generation: Google Gemini free tier — model `gemini-3.8-flash` (2.5-flash 404s for accounts created after mid-2026)
 - Hosting: Vercel (free tier)
 - Package Manager: npm
 - Routing: react-router-dom
@@ -65,6 +67,7 @@ Phase 7: (to be defined)
 - ErrorBoundary is a class component in `.jsx` (default export only) and wraps `BrowserRouter` in `main.jsx`; fallback offers "Try again" (reset) + "Reload page".
 - Git/deploy: repo initialized on branch `main` with initial commit `9d57bac` (staged set verified free of `.env`/`node_modules`/`dist`/logs). No remote configured and no `gh` CLI — GitHub push + Vercel import are the user's steps (README § Deploy to Vercel).
 - Phase 6 schema decision: `supabase/schema.sql` is now the file we tell users to run (verbatim SQL from phase instructions); `supabase/migrations/0001_initial_schema.sql` remains untouched and equivalent (same tables/columns/RLS semantics; only index names, policy names, and a `rating between 1 and 4` check differ). Running one after the other is harmless (`if not exists` + `drop policy if exists`).
+- Material import decisions: (a) PDFs are parsed **locally** with pdf.js (instant, no tokens, no cost) — only images go through Gemini vision (they need OCR; uses Gemini free quota; Gemini-only, no Groq/Cerebras fallback for transcription). (b) `extract.js` uses **dynamic imports** for pdfjs and mammoth so their weight stays out of the main bundle (main +6 kB; pdfjs/mammoth are separate lazy chunks). (c) pdf.js must use the **legacy build** (`pdfjs-dist/legacy/build/pdf.mjs` + `pdf.worker.min.mjs?url`) — the modern build warns/fails outside modern browsers; `doc.destroy?.()` because v6 removed it. (d) mammoth input passes BOTH `{arrayBuffer}` (browser build) and `{buffer}` (Node build) because its browser field only swaps two files, not the entry. (e) Import **appends** extracted text to whatever is already in the notes box (users can import multiple files); empty extraction (scanned PDF) → error suggesting an image screenshot instead. (f) `globalThis.pdfjsWorker = <worker module>` is the pdfjs-sanctioned main-thread hook — used only in Node tests (browsers get a real Worker via `workerSrc`); do not set it in app code.
 
 ## Known Risks / Watch Items
 - Supabase project pauses after 7 days of inactivity → add cron ping.
@@ -83,6 +86,10 @@ Phase 7: (to be defined)
 - Supabase queries in `useAnalytics` fetch full `review_logs` (no pagination) — fine for free-tier scale, but if a user accumulates >1000 logs, analytics will silently undercount (Supabase default row cap).
 - "Could not find the table 'public.decks' in the schema cache" diagnostics (Phase 6): tables were verified EXISTING via REST in project `vlrtihujwdlmseifpmim` (2026-10-05). If the error still shows, check in order: (1) Vercel env vars `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` match the `.env` values and were present at build time, (2) the app isn't pointed at a different Supabase project, (3) reload the PostgREST schema cache (Dashboard → Settings → API → Reload schema).
 
+- Image import (OCR) requires a Gemini key and consumes Gemini free-tier quota; there is NO Groq/Cerebras fallback for transcription — a rate-limited image import shows the standard rate-limit error until the Gemini quota resets.
+- Scanned/image-only PDFs extract zero text (pdf.js reads text layer only) → the UI tells users to screenshot the page and import it as an image instead; no in-app PDF→image conversion yet.
+- `useAnalytics`/import have no size caps yet: a very large PDF (hundreds of pages) produces a large notes string and prompt — fine for normal study material, revisit if users report slow imports.
+
 ## File Index
 - `AGENTS.md` — this file (project context)
 - `architecture.md` — system architecture reference
@@ -98,7 +105,8 @@ Phase 7: (to be defined)
 - `src/App.jsx` — router: `/auth` (guest-only) + `/dashboard`, `/decks/:id`, `/review`, `/upload`, `/analytics` (ProtectedLayout) + `/` → `/dashboard` + wildcard redirect
 - `src/lib/supabase.js` — Supabase client singleton (placeholder fallback until `.env` is set)
 - `src/lib/fsrs.js` — ts-fsrs wrapper: Rating enum, scheduleCard, createEmptyCardFSRS
-- `src/lib/ai.js` — Gemini → Groq → Cerebras chain: generateCards, AiError codes, localStorage key helpers, providerLabel
+- `src/lib/ai.js` — Gemini → Groq → Cerebras chain: generateCards, transcribeImage (Gemini vision OCR), AiError codes, localStorage key helpers, providerLabel
+- `src/lib/extract.js` — material import dispatcher: extractFromFile (PDF via pdfjs legacy, image via transcribeImage, docx via mammoth, txt/md), SUPPORTED_INPUTS
 - `src/lib/utils.js` — `cn` helper
 - `src/hooks/useAuth.js` — AuthProvider + useAuth (user, loading, signIn, signUp, signOut); uses `createElement`, no JSX
 - `src/hooks/useDecks.js` — deck CRUD: fetchDecks/createDeck/updateDeck/deleteDeck + loading/error
@@ -121,6 +129,8 @@ Phase 7: (to be defined)
 - `supabase/` — SQL migrations and edge functions (if any)
 
 ## Last Updated
+2026-10-05 — Phase 6.5 completed: Material import (PDF/image/.docx/txt/md) via `src/lib/extract.js` + `transcribeImage` in ai.js + Upload.jsx import button & drag-and-drop; lint/build pass, 11-check smoke green (incl. live Gemini image payload + real PDF/docx extraction); README/architecture updated. See Phase 6.5 entry + material-import Key Decisions.
+2026-10-05 — Gemini model hotfix: `gemini-2.5-flash` returns 404 for accounts created after mid-2026 (user's real key hit this) → `ai.js` now uses `gemini-3.8-flash` (verified live: `generateCards` produced 12 valid cards in ~5 s with the user's key), provider label updated; new `unavailable` AiError code for 503/529/504 with friendly copy + Retry button in Upload; README/architecture/tech-stack lines updated to the new model name. lint/build pass.
 2026-10-05 — Phase 6 completed: supabase/schema.sql (verbatim full schema + RLS) + supabase/README.md (SQL Editor run/verify steps) created; supabase.js env-var names verified correct (`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` present in `.env`); no app code modified; live REST check confirms all three tables already exist in project `vlrtihujwdlmseifpmim` (stale-cache/env-var diagnostics added to Known Risks). `architecture.md` unchanged (schema tables/columns/policies it describes are identical).
 2026-10-05 — Phase 5 completed: recharts + skeleton installed, useAnalytics.js (two-query aggregation + tested pure helpers), Analytics.jsx (stat cards, BarChart forecast, LineChart activity, weak decks, skeleton/error/empty states), ErrorBoundary.jsx wrapping router, Dashboard Analytics nav + /analytics route, README.md (setup/Supabase/AI/cron/Vercel/free-tier docs), git repo initialized with initial commit `9d57bac` (push + Vercel import left to user); lint/build/31-check smoke/dev verified. `architecture.md` Component Map gained two entries (`useAnalytics.js`, `ErrorBoundary.jsx`) — the only change; `Analytics.jsx` was already listed.
 2026-10-05 — Phase 4 completed: ai.js (Gemini → Groq → Cerebras chain, AiError codes, localStorage key helpers, providerLabel), Settings.jsx (SettingsDialog/SettingsForm), Upload.jsx (deck select, generate, editable preview, save + toast + redirect, friendly errors), Dashboard nav (Generate Cards / Settings), `/upload` route; lint/build/27-check smoke/dev verified. `architecture.md` Component Map gained one entry (`src/pages/Settings.jsx`) — the only change; data flows already described this phase.

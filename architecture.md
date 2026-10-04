@@ -3,14 +3,15 @@
 ## High-Level Flow
 1. User authenticates via Supabase Auth.
 2. User creates a deck (course).
-3. User pastes notes → AI generates atomic flashcards.
+3. User pastes or imports notes (PDF / image / .docx / text) → AI generates atomic flashcards.
 4. User reviews cards → FSRS schedules next review.
 5. Dashboard shows retention, weak topics, due cards.
 
 ## Component Map
 - `src/lib/supabase.js` — Supabase client singleton.
 - `src/lib/fsrs.js` — FSRS scheduling wrapper.
-- `src/lib/ai.js` — Gemini card generation + fallback providers.
+- `src/lib/ai.js` — Gemini card generation + fallback providers + image transcription.
+- `src/lib/extract.js` — material import: PDF (pdf.js, local), images (Gemini vision), .docx (mammoth), .txt/.md.
 - `src/hooks/useAuth.js` — Auth context (user, signIn, signUp, signOut).
 - `src/hooks/useDecks.js` — CRUD for decks.
 - `src/hooks/useCards.js` — CRUD for cards.
@@ -41,12 +42,12 @@ All tables have RLS enabled with `auth.uid() = user_id` policies.
 
 ## External Services
 - Supabase (DB, Auth, RLS, pgvector)
-- Google Gemini 2.5 Flash (card generation)
+- Google Gemini (gemini-3.8-flash, card generation + image text transcription)
 - Groq / Cerebras (fallback LLM providers)
 - Vercel (frontend hosting)
 
 ## Data Flow: Card Generation
-1. User pastes notes in `Upload.jsx`.
+1. User pastes notes in `Upload.jsx`, or imports a file (button / drag-and-drop → `extract.js` extracts text into the notes box; images are transcribed via `ai.js transcribeImage` using the user's Gemini key).
 2. `ai.js` sends notes to Gemini with a structured JSON prompt.
 3. Gemini returns array of `{ question, answer, source }`.
 4. User edits/approves cards in the preview UI.

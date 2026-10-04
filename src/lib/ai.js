@@ -1,5 +1,7 @@
-const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+// gemini-2.5-flash returns 404 for accounts created after mid-2026 —
+// Google directs new users to gemini-3.8-flash (verified working 2026-10-05).
+const GEMINI_MODEL = 'gemini-3.8-flash'
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions'
 
@@ -16,7 +18,7 @@ export const STORAGE_KEYS = {
 }
 
 const PROVIDER_LABELS = {
-  gemini: 'Google Gemini 2.5 Flash',
+  gemini: `Google Gemini (${GEMINI_MODEL})`,
   groq: 'Groq (Llama 3.3 70B)',
   cerebras: 'Cerebras (Llama 3.3 70B)',
 }
@@ -167,6 +169,17 @@ async function toAiError(response, provider) {
       provider,
     )
   }
+  if (
+    response.status === 503 ||
+    response.status === 529 ||
+    response.status === 504
+  ) {
+    return new AiError(
+      'unavailable',
+      `${providerLabel(provider)} is busy right now. Try again in a minute.`,
+      provider,
+    )
+  }
   if (/api[_ ]key|unauthorized|permission|forbidden/i.test(detail)) {
     return new AiError(
       'invalid_key',
@@ -280,6 +293,56 @@ function callGroq(notes, key) {
 
 function callCerebras(notes, key) {
   return callOpenAiCompatible(CEREBRAS_URL, CEREBRAS_MODEL, 'cerebras', notes, key)
+}
+
+// --- Image transcription (for importing screenshots / photos of pages) ---
+
+/**
+ * Transcribe all visible text in an image via Gemini's vision input.
+ * @param {{mimeType: string, data: string}} image - base64 image
+ * @param {string|object} [apiKeys] - a single Gemini key or `{ gemini, ... }`
+ * @returns {Promise<string>} the raw transcribed text (may be empty)
+ */
+export async function transcribeImage(image, apiKeys) {
+  const keys = normalizeKeys(apiKeys)
+  if (!keys.gemini) {
+    throw new AiError(
+      'missing_key',
+      'Reading text from images needs a Gemini key. Add one in Settings.',
+      'gemini',
+    )
+  }
+  const response = await request(
+    `${GEMINI_URL}?key=${encodeURIComponent(keys.gemini)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType: image.mimeType, data: image.data } },
+              {
+                text: 'Transcribe every word of text visible in this image, top to bottom, preserving line breaks and reading order. Output ONLY the raw transcribed text — no commentary, no markdown, no labels. If there is no text in the image, output nothing.',
+              },
+            ],
+          },
+        ],
+      }),
+    },
+    'gemini',
+  )
+  let payload
+  try {
+    payload = await response.json()
+  } catch {
+    throw new AiError('malformed', 'Gemini returned an unreadable response.', 'gemini')
+  }
+  return (payload?.candidates?.[0]?.content?.parts || [])
+    .map((part) => part.text || '')
+    .join('')
+    .trim()
 }
 
 // --- Public API ---

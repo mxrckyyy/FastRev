@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
+  FileUp,
   KeyRound,
   Plus,
   RefreshCw,
@@ -27,6 +28,7 @@ import {
   loadApiKeys,
   providerLabel,
 } from '@/lib/ai'
+import { extractFromFile, SUPPORTED_INPUTS } from '@/lib/extract'
 import SettingsDialog from '@/pages/Settings'
 
 let rowCounter = 0
@@ -56,6 +58,11 @@ function friendlyMessage(error) {
       return 'Free tier limit reached. Try again in a minute or switch provider.'
     case 'network':
       return 'Could not reach the AI provider. Check your connection and try again.'
+    case 'unavailable':
+      return (
+        error?.message ||
+        'The AI provider is busy right now. Try again in a minute.'
+      )
     case 'malformed':
       return 'The AI replied in an unexpected format. Try generating again.'
     default:
@@ -87,6 +94,12 @@ export default function Upload() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [toast, setToast] = useState(null)
 
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState(null)
+  const [importMsg, setImportMsg] = useState(null)
+  const [dragging, setDragging] = useState(false)
+  const fileInputRef = useRef(null)
+
   useEffect(() => {
     if (!toast) return undefined
     const timer = setTimeout(() => setToast(null), 3000)
@@ -96,6 +109,45 @@ export default function Upload() {
   function handleSettingsChange(open) {
     setSettingsOpen(open)
     if (!open) setApiKeys(loadApiKeys())
+  }
+
+  async function runImport(file) {
+    if (importing) return
+    setImporting(true)
+    setImportError(null)
+    setImportMsg(null)
+    try {
+      const { text, meta } = await extractFromFile(file)
+      if (!text) {
+        setImportError({
+          code: 'empty',
+          message:
+            'No selectable text found in this file. If it is a scanned PDF or a photo of a page, take a screenshot of it and import that image instead.',
+        })
+        return
+      }
+      setNotes((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${text}` : text))
+      setImportMsg(
+        `Imported ${meta ? `${meta} of text ` : ''}from ${file.name}.`,
+      )
+    } catch (error) {
+      setImportError(error)
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  function handleFileChange(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file) runImport(file)
+  }
+
+  function handleDrop(event) {
+    event.preventDefault()
+    setDragging(false)
+    const file = event.dataTransfer.files?.[0]
+    if (file) runImport(file)
   }
 
   async function handleGenerate() {
@@ -249,17 +301,101 @@ export default function Upload() {
               )}
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="notes" className="text-sm font-medium">
-                Study notes
-              </label>
+            <div
+              className="space-y-2"
+              onDragOver={(event) => {
+                event.preventDefault()
+                setDragging(true)
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={handleDrop}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="notes" className="text-sm font-medium">
+                  Study notes
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                >
+                  {importing ? (
+                    <>
+                      <RefreshCw
+                        className="mr-1.5 h-3.5 w-3.5 animate-spin"
+                        aria-hidden="true"
+                      />
+                      Importing…
+                    </>
+                  ) : (
+                    <>
+                      <FileUp className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                      Import file
+                    </>
+                  )}
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.txt,.md,.markdown,.docx,image/*"
+                  onChange={handleFileChange}
+                />
+              </div>
               <Textarea
                 id="notes"
-                placeholder="Paste your notes here…"
-                className="min-h-40"
+                placeholder="Paste your notes here — or import a PDF, screenshot, or document…"
+                className={`min-h-40 ${dragging ? 'ring-2 ring-ring' : ''}`}
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                Supported: {SUPPORTED_INPUTS} — or drag a file here.
+              </p>
+              {importError && (
+                <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                  <p className="flex items-start gap-2 text-sm text-destructive">
+                    <TriangleAlert
+                      className="mt-0.5 h-4 w-4 shrink-0"
+                      aria-hidden="true"
+                    />
+                    {friendlyMessage(importError)}
+                  </p>
+                  {(importError.code === 'missing_key' ||
+                    importError.code === 'invalid_key' ||
+                    importError.code === 'rate_limit') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSettingsOpen(true)}
+                    >
+                      <KeyRound
+                        className="mr-1.5 h-3.5 w-3.5"
+                        aria-hidden="true"
+                      />
+                      Open Settings
+                    </Button>
+                  )}
+                  {importError.code === 'unsupported' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <FileUp
+                        className="mr-1.5 h-3.5 w-3.5"
+                        aria-hidden="true"
+                      />
+                      Choose another file
+                    </Button>
+                  )}
+                </div>
+              )}
+              {importMsg && !importError && (
+                <p className="text-xs font-medium text-foreground">{importMsg}</p>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -321,7 +457,8 @@ export default function Upload() {
                       Open Settings
                     </Button>
                   )}
-                  {genError.code === 'network' && (
+                  {(genError.code === 'network' ||
+                    genError.code === 'unavailable') && (
                     <Button
                       variant="outline"
                       size="sm"
