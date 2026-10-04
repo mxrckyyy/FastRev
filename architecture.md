@@ -15,6 +15,8 @@
 - `src/hooks/useDecks.js` — CRUD for decks.
 - `src/hooks/useCards.js` — CRUD for cards.
 - `src/hooks/useReviews.js` — Review queue, submission, FSRS update.
+- `src/hooks/useAnalytics.js` — Aggregations: retention, streak, due forecast, activity, weak decks.
+- `src/components/ErrorBoundary.jsx` — Global error boundary wrapping the router.
 - `src/pages/Auth.jsx` — Login / signup page.
 - `src/pages/DeckList.jsx` — Deck list + create deck.
 - `src/pages/DeckDetail.jsx` — Cards inside a deck.
