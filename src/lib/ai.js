@@ -5,7 +5,8 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions'
 
-const GROQ_MODEL = 'llama-3.3-70b-versatile'
+// llama-3.3-70b-versatile was retired 2026-08-16 (Groq now answers HTTP 404).
+const GROQ_MODEL = 'openai/gpt-oss-120b'
 const CEREBRAS_MODEL = 'llama-3.3-70b'
 
 // Order matters: this is the fallback chain.
@@ -19,7 +20,7 @@ export const STORAGE_KEYS = {
 
 const PROVIDER_LABELS = {
   gemini: `Google Gemini (${GEMINI_MODEL})`,
-  groq: 'Groq (Llama 3.3 70B)',
+  groq: 'Groq (GPT-OSS 120B)',
   cerebras: 'Cerebras (Llama 3.3 70B)',
 }
 

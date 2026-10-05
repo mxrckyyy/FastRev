@@ -6,7 +6,7 @@ A free-tier flashcard app: paste or import your study material (PDF, images, doc
 
 - **Auth** — email/password sign-in via Supabase Auth (RLS-protected data)
 - **Decks** — create, rename, and delete decks; cards live inside decks
-- **AI card generation** — paste notes → 10–15 flashcards, editable before saving. Provider chain: **Google Gemini (`gemini-3.8-flash`) → Groq (Llama 3.3 70B) → Cerebras**, so hitting one free-tier limit falls through to the next
+- **AI card generation** — paste notes → 10–15 flashcards, editable before saving. Provider chain: **Google Gemini (`gemini-3.8-flash`) → Groq (`openai/gpt-oss-120b`) → Cerebras**, so hitting one free-tier limit falls through to the next
 - **Material import** — drop or pick a file on the Generate Cards page: **PDF** (text extracted locally in the browser with pdf.js), **images** (screenshots/photos of pages transcribed by your Gemini key), **`.docx`** (mammoth), or **`.txt`/`.md`** — imported text lands in the notes box for you to trim before generating
 - **Reviews** — one card at a time, rated Again / Hard / Good / Easy, scheduled by **FSRS** (`ts-fsrs`)
 - **Analytics** — retention rate, total reviews, current streak, cards learned, a 7-day due forecast (bar chart), 14-day review activity (line chart), and weakest decks by accuracy
@@ -62,7 +62,7 @@ Open the app → **Settings** (Dashboard or Upload page) and paste one or more k
 | Provider | Key source | Used |
 | --- | --- | --- |
 | Gemini (`gemini-3.8-flash`) | [Google AI Studio](https://aistudio.google.com/apikey) | First choice |
-| Groq Llama 3.3 70B | [console.groq.com/keys](https://console.groq.com/keys) | Fallback |
+| Groq GPT-OSS 120B (`openai/gpt-oss-120b`) | [console.groq.com/keys](https://console.groq.com/keys) | Fallback |
 | Cerebras Llama 3.3 70B | [cloud.cerebras.ai](https://cloud.cerebras.ai) | Last fallback |
 
 A single Gemini key is enough; adding the others keeps generation working when a free-tier rate limit kicks in.

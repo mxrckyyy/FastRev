@@ -43,7 +43,7 @@ All tables have RLS enabled with `auth.uid() = user_id` policies.
 ## External Services
 - Supabase (DB, Auth, RLS, pgvector)
 - Google Gemini (gemini-3.8-flash, card generation + image text transcription)
-- Groq / Cerebras (fallback LLM providers)
+- Groq (`openai/gpt-oss-120b`) / Cerebras (`llama-3.3-70b`) — fallback LLM providers
 - Vercel (frontend hosting)
 
 ## Data Flow: Card Generation
