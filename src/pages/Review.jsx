@@ -29,7 +29,7 @@ function BackLink() {
       to="/dashboard"
       className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
     >
-      <ArrowLeft className="mr-2 h-4 w-4" />
+      <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
       Back to dashboard
     </Link>
   )
@@ -68,9 +68,12 @@ export default function Review() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="flex items-center justify-between border-b px-6 py-4">
+        <header className="flex items-center justify-between border-b px-4 py-4 sm:px-6">
           <BackLink />
-          <p className="text-sm text-muted-foreground">Loading review…</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-muted-foreground">Loading review…</p>
+            <ThemeToggle />
+          </div>
         </header>
         <main className="mx-auto w-full max-w-2xl space-y-4 px-4 py-8 sm:px-6">
           <div className="h-4 w-32 animate-pulse rounded bg-muted" />
@@ -90,21 +93,21 @@ export default function Review() {
   }
 
   return (
-<div className="min-h-screen bg-background">
-        <header className="flex items-center justify-between gap-3 border-b px-4 py-4 sm:px-6">
-          <BackLink />
-          <div className="flex items-center gap-2">
-            {current && (
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  {index + 1} / {total}
-                </span>
-                <span className="hidden sm:inline"> · {total - index} remaining</span>
-              </p>
-            )}
-            <ThemeToggle />
-          </div>
-        </header>
+    <div className="min-h-screen bg-background">
+      <header className="flex items-center justify-between gap-3 border-b px-4 py-4 sm:px-6">
+        <BackLink />
+        <div className="flex items-center gap-2">
+          {current && (
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {index + 1} / {total}
+              </span>
+              <span className="hidden sm:inline"> · {total - index} remaining</span>
+            </p>
+          )}
+          <ThemeToggle />
+        </div>
+      </header>
 
       <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
         {error && total === 0 && (

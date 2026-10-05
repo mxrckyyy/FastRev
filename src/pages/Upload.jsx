@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft,
   FileUp,
   KeyRound,
   Plus,
@@ -20,7 +19,6 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import ThemeToggle from '@/components/ThemeToggle'
 import { useCards } from '@/hooks/useCards'
 import { useDecks } from '@/hooks/useDecks'
 import {
@@ -234,31 +232,8 @@ export default function Upload() {
   const canGenerate = Boolean(notes.trim()) && !noKeys && !generating
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b px-4 py-4 sm:px-6">
-        <div className="flex items-center justify-between gap-4">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Back to dashboard
-          </Link>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSettingsOpen(true)}
-            >
-              <KeyRound className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-              Settings
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6">
+    <div>
+      <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold">
             <Sparkles className="h-5 w-5" aria-hidden="true" />
@@ -581,14 +556,14 @@ export default function Upload() {
             </CardContent>
           </Card>
         )}
-      </main>
+      </div>
 
       <SettingsDialog open={settingsOpen} onOpenChange={handleSettingsChange} />
 
       {toast && (
         <div
           role="status"
-          className="fixed inset-x-4 bottom-4 z-50 max-w-sm rounded-lg border bg-elevated px-4 py-3 text-sm shadow-lg sm:inset-x-auto sm:right-6 sm:bottom-6"
+          className="fixed inset-x-4 bottom-20 z-50 max-w-sm rounded-lg border bg-elevated px-4 py-3 text-sm shadow-lg sm:inset-x-auto sm:right-6 lg:bottom-6"
         >
           {toast}
         </div>

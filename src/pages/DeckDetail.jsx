@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +31,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import ThemeToggle from '@/components/ThemeToggle'
 import { useCards } from '@/hooks/useCards'
 import { useDecks } from '@/hooks/useDecks'
 
@@ -167,25 +166,15 @@ export default function DeckDetail() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex items-center justify-center py-32">
         <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b px-6 py-4">
-        <Link
-          to="/dashboard"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Back to dashboard
-        </Link>
-      </header>
-
-      <main className="mx-auto w-full max-w-3xl space-y-6 px-6 py-6">
+    <div>
+      <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6">
         {!deck ? (
           <div className="space-y-4">
             <p className="text-sm text-destructive">
@@ -344,7 +333,7 @@ export default function DeckDetail() {
             </div>
           </>
         )}
-      </main>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,4 @@
-import { Link } from 'react-router-dom'
 import {
-  ArrowLeft,
   CalendarDays,
   Flame,
   Layers,
@@ -26,7 +24,6 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import ThemeToggle from '@/components/ThemeToggle'
 import { useAnalytics } from '@/hooks/useAnalytics'
 
 // Recharts takes inline styles, so it reads the same design tokens directly
@@ -103,28 +100,13 @@ function AnalyticsSkeleton() {
 export default function Analytics() {
   const { stats, loading, error, fetchAnalytics } = useAnalytics()
 
+  // Page title lives in the shell top bar; this block keeps only the intro.
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b px-4 py-4 sm:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Back to dashboard
-          </Link>
-          <ThemeToggle />
-        </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6">
-        <div>
-          <h1 className="text-xl font-semibold">Analytics</h1>
-          <p className="text-sm text-muted-foreground">
-            Retention, upcoming workload, and your weakest decks.
-          </p>
-        </div>
+    <div>
+      <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6">
+        <p className="text-sm text-muted-foreground">
+          Retention, upcoming workload, and your weakest decks.
+        </p>
 
         {loading && <AnalyticsSkeleton />}
 
@@ -368,7 +350,7 @@ export default function Analytics() {
             </Card>
           </>
         )}
-      </main>
+      </div>
     </div>
   )
 }
