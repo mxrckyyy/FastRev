@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import ThemeToggle from '@/components/ThemeToggle'
 import { useCards } from '@/hooks/useCards'
 import { useDecks } from '@/hooks/useDecks'
 import {
@@ -70,8 +71,10 @@ function friendlyMessage(error) {
   }
 }
 
+// Native <select> (no shadcn Select installed) styled from the same tokens as
+// the Input component so both controls read identically in either theme.
 const selectClasses =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30'
 
 export default function Upload() {
   const navigate = useNavigate()
@@ -232,7 +235,7 @@ export default function Upload() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b px-6 py-4">
+      <header className="border-b px-4 py-4 sm:px-6">
         <div className="flex items-center justify-between gap-4">
           <Link
             to="/dashboard"
@@ -241,18 +244,21 @@ export default function Upload() {
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Back to dashboard
           </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <KeyRound className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            Settings
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <KeyRound className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+              Settings
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl space-y-6 px-6 py-6">
+      <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold">
             <Sparkles className="h-5 w-5" aria-hidden="true" />
@@ -582,7 +588,7 @@ export default function Upload() {
       {toast && (
         <div
           role="status"
-          className="fixed right-6 bottom-6 z-50 rounded-lg border bg-popover px-4 py-3 text-sm shadow-lg"
+          className="fixed inset-x-4 bottom-4 z-50 max-w-sm rounded-lg border bg-elevated px-4 py-3 text-sm shadow-lg sm:inset-x-auto sm:right-6 sm:bottom-6"
         >
           {toast}
         </div>

@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/card'
 import { useAuth } from '@/hooks/useAuth'
 import { useReviews } from '@/hooks/useReviews'
+import ThemeToggle from '@/components/ThemeToggle'
 import DeckList from '@/pages/DeckList'
 import SettingsDialog from '@/pages/Settings'
 
@@ -36,7 +37,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b px-6 py-4">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b px-4 py-4 sm:px-6">
         <div>
           <h1 className="text-xl font-semibold">
             Welcome{user?.email ? `, ${user.email}` : ''}
@@ -58,6 +59,7 @@ export default function Dashboard() {
               Generate Cards
             </Link>
           </Button>
+          <ThemeToggle />
           <Button variant="outline" onClick={() => setSettingsOpen(true)}>
             <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" />
             Settings
@@ -68,7 +70,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl space-y-8 px-6 py-6">
+      <main className="mx-auto w-full max-w-5xl space-y-8 px-4 py-6 sm:px-6">
         <div className="flex flex-wrap items-center gap-4">
           <Card className="min-w-48 flex-1">
             <CardHeader>
@@ -77,7 +79,7 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold">{dueCount ?? '—'}</p>
+              <p className="text-3xl font-semibold tabular-nums">{dueCount ?? '—'}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {dueCaption(dueCount, Boolean(error))}
               </p>

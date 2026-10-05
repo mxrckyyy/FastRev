@@ -11,28 +11,16 @@ import {
 } from '@/components/ui/card'
 import { Rating } from '@/lib/fsrs'
 import { useReviews } from '@/hooks/useReviews'
+import ThemeToggle from '@/components/ThemeToggle'
 
+// Ratings map to the semantic status tokens: Again = danger, Hard = warning,
+// Good = success, Easy = primary. Every button also carries a text label, so
+// the meaning never depends on color alone.
 const RATINGS = [
-  {
-    value: Rating.Again,
-    label: 'Again',
-    className: 'bg-red-600 text-white hover:bg-red-700',
-  },
-  {
-    value: Rating.Hard,
-    label: 'Hard',
-    className: 'bg-amber-500 text-white hover:bg-amber-600',
-  },
-  {
-    value: Rating.Good,
-    label: 'Good',
-    className: 'bg-emerald-600 text-white hover:bg-emerald-700',
-  },
-  {
-    value: Rating.Easy,
-    label: 'Easy',
-    className: 'bg-sky-600 text-white hover:bg-sky-700',
-  },
+  { value: Rating.Again, label: 'Again', variant: 'danger' },
+  { value: Rating.Hard, label: 'Hard', variant: 'warning' },
+  { value: Rating.Good, label: 'Good', variant: 'success' },
+  { value: Rating.Easy, label: 'Easy', variant: 'default' },
 ]
 
 function BackLink() {
@@ -84,13 +72,13 @@ export default function Review() {
           <BackLink />
           <p className="text-sm text-muted-foreground">Loading review…</p>
         </header>
-        <main className="mx-auto w-full max-w-2xl space-y-4 px-6 py-8">
+        <main className="mx-auto w-full max-w-2xl space-y-4 px-4 py-8 sm:px-6">
           <div className="h-4 w-32 animate-pulse rounded bg-muted" />
           <div className="space-y-4 rounded-lg border p-6">
             <div className="h-4 w-20 animate-pulse rounded bg-muted" />
             <div className="h-6 w-3/4 animate-pulse rounded bg-muted" />
           </div>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="h-10 animate-pulse rounded bg-muted" />
             <div className="h-10 animate-pulse rounded bg-muted" />
             <div className="h-10 animate-pulse rounded bg-muted" />
@@ -102,21 +90,23 @@ export default function Review() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between border-b px-6 py-4">
-        <BackLink />
-        {current && (
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">
-              {index + 1} / {total}
-            </span>
-            {' · '}
-            {total - index} remaining
-          </p>
-        )}
-      </header>
+<div className="min-h-screen bg-background">
+        <header className="flex items-center justify-between gap-3 border-b px-4 py-4 sm:px-6">
+          <BackLink />
+          <div className="flex items-center gap-2">
+            {current && (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {index + 1} / {total}
+                </span>
+                <span className="hidden sm:inline"> · {total - index} remaining</span>
+              </p>
+            )}
+            <ThemeToggle />
+          </div>
+        </header>
 
-      <main className="mx-auto w-full max-w-2xl px-6 py-8">
+      <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
         {error && total === 0 && (
           <div className="space-y-4 py-12 text-center">
             <p className="text-sm text-destructive">{error}</p>
@@ -190,11 +180,11 @@ export default function Review() {
                     Show Answer
                   </Button>
                 ) : (
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {RATINGS.map((rating) => (
                       <Button
                         key={rating.value}
-                        className={rating.className}
+                        variant={rating.variant}
                         disabled={submitting}
                         onClick={() => handleRating(rating.value)}
                       >
