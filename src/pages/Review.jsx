@@ -1,46 +1,69 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { CircleCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Rating } from '@/lib/fsrs'
+import { Skeleton } from '@/components/ui/skeleton'
+import ReviewShell from '@/components/ReviewShell'
+import ReviewProgress from '@/components/ReviewProgress'
+import Flashcard from '@/components/Flashcard'
+import RatingButtons from '@/components/RatingButtons'
+import ShortcutHint from '@/components/ShortcutHint'
+import EmptyState from '@/components/EmptyState'
+import ErrorState from '@/components/ErrorState'
+import { RATINGS } from '@/lib/ratings'
 import { useReviews } from '@/hooks/useReviews'
-import ThemeToggle from '@/components/ThemeToggle'
 
-// Ratings map to the semantic status tokens: Again = danger, Hard = warning,
-// Good = success, Easy = primary. Every button also carries a text label, so
-// the meaning never depends on color alone.
-const RATINGS = [
-  { value: Rating.Again, label: 'Again', variant: 'danger' },
-  { value: Rating.Hard, label: 'Hard', variant: 'warning' },
-  { value: Rating.Good, label: 'Good', variant: 'success' },
-  { value: Rating.Easy, label: 'Easy', variant: 'default' },
-]
-
-function BackLink() {
+function ProgressSkeleton() {
   return (
-    <Link
-      to="/dashboard"
-      className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
-    >
-      <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
-      Back to dashboard
-    </Link>
+    <div className="space-y-2" aria-hidden="true">
+      <Skeleton className="mx-auto h-4 w-28" />
+      <Skeleton className="h-1.5 w-full rounded-full" />
+    </div>
   )
 }
 
+function CardSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true">
+      <span className="sr-only" role="status">
+        Loading your review session…
+      </span>
+      <div aria-hidden="true" className="space-y-4">
+        <div className="space-y-3 rounded-xl border border-border bg-card p-6 shadow-sm sm:p-8">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-6 w-3/4" />
+          <Skeleton className="h-6 w-1/2" />
+        </div>
+        <Skeleton className="h-12 w-full rounded-lg sm:h-11" />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Review — focus-mode session screen (route lives outside <AppShell>, so no
+ * sidebar/bottom nav). Business logic is untouched: the queue still comes
+ * from useReviews.fetchDueCards and ratings still go through submitReview →
+ * fsrs scheduleCard → review_logs. This file owns only presentation,
+ * keyboard shortcuts and focus management.
+ *
+ * Keyboard: Space reveals (only while hidden), 1–4 rate (only after reveal),
+ * never while typing in a field, and a synchronous ref guard makes duplicate
+ * submissions impossible even between keypresses.
+ */
 export default function Review() {
   const { cards, loading, error, fetchDueCards, submitReview } = useReviews()
   const [revealed, setRevealed] = useState(false)
   const [index, setIndex] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [reviewError, setReviewError] = useState(null)
+  // Per-session rating tally — real counts of what the user just submitted,
+  // shown on the completion screen. No invented statistics.
+  const [tally, setTally] = useState({})
+  const submittingRef = useRef(false)
+  const questionRef = useRef(null)
+  const advanceFocusRef = useRef(false)
+  const completionRef = useRef(null)
 
   useEffect(() => {
     fetchDueCards()
@@ -50,157 +73,228 @@ export default function Review() {
   const current = cards[index]
   const empty = !loading && total === 0 && !error
   const finished = !loading && total > 0 && index >= total
+  const position = Math.min(index + 1, total)
+  // Real per-session counts (what was actually submitted) for the
+  // completion screen — ratings with zero picks are left out.
+  const summary = RATINGS.map((r) => ({ ...r, count: tally[r.value] ?? 0 })).filter(
+    (r) => r.count > 0,
+  )
 
   async function handleRating(value) {
-    if (!current || submitting) return
+    if (!current || submittingRef.current) return
+    submittingRef.current = true
     setSubmitting(true)
     setReviewError(null)
     const { error: submitError } = await submitReview(current.id, value)
+    submittingRef.current = false
     setSubmitting(false)
     if (submitError) {
       setReviewError(submitError.message)
       return
     }
+    setTally((prev) => ({ ...prev, [value]: (prev[value] ?? 0) + 1 }))
+    advanceFocusRef.current = true
     setRevealed(false)
     setIndex((prev) => prev + 1)
   }
 
+  // Latest-ref mirror: the global key handler is bound once per card/reveal
+  // state but must always call the freshest handleRating (no stale closures).
+  const handleRatingRef = useRef(handleRating)
+  useEffect(() => {
+    handleRatingRef.current = handleRating
+  })
+
+  // After a successful rating, move focus to the next card's question so
+  // keyboard/screen-reader users land on the new content (the heading's
+  // sr-only "Card x of y." prefix makes the announcement complete).
+  useEffect(() => {
+    if (!advanceFocusRef.current) return
+    advanceFocusRef.current = false
+    questionRef.current?.focus()
+  }, [index])
+
+  // Session finished: put focus on the completion heading.
+  useEffect(() => {
+    if (finished) completionRef.current?.focus()
+  }, [finished])
+
+  // Keyboard shortcuts — bound per card/reveal state; guards read the fresh
+  // render values, submission goes through the latest-ref mirror.
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      const target = e.target
+      const tag = target?.tagName
+      if (
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        target?.isContentEditable
+      ) {
+        return
+      }
+
+      if (e.code === 'Space' || e.key === ' ') {
+        // A focused button/link activates itself on keyup — don't double-fire.
+        if (tag === 'BUTTON' || tag === 'A') return
+        if (!current || revealed || submittingRef.current) return
+        e.preventDefault() // no page scroll behind the reveal
+        setRevealed(true)
+        return
+      }
+
+      if (!current || !revealed || submittingRef.current) return
+      const slot = Number(e.key)
+      if (!Number.isInteger(slot) || slot < 1 || slot > RATINGS.length) return
+      handleRatingRef.current(RATINGS[slot - 1].value)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [current, revealed])
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <header className="flex items-center justify-between border-b px-4 py-4 sm:px-6">
-          <BackLink />
-          <div className="flex items-center gap-2">
-            <p className="text-sm text-muted-foreground">Loading review…</p>
-            <ThemeToggle />
-          </div>
-        </header>
-        <main className="mx-auto w-full max-w-2xl space-y-4 px-4 py-8 sm:px-6">
-          <div className="h-4 w-32 animate-pulse rounded bg-muted" />
-          <div className="space-y-4 rounded-lg border p-6">
-            <div className="h-4 w-20 animate-pulse rounded bg-muted" />
-            <div className="h-6 w-3/4 animate-pulse rounded bg-muted" />
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="h-10 animate-pulse rounded bg-muted" />
-            <div className="h-10 animate-pulse rounded bg-muted" />
-            <div className="h-10 animate-pulse rounded bg-muted" />
-            <div className="h-10 animate-pulse rounded bg-muted" />
-          </div>
-        </main>
-      </div>
+      <ReviewShell progress={<ProgressSkeleton />}>
+        <CardSkeleton />
+      </ReviewShell>
     )
   }
 
+  const progress =
+    total > 0 ? (
+      <ReviewProgress position={position} total={total} />
+    ) : null
+  const footer = current ? <ShortcutHint revealed={revealed} /> : null
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between gap-3 border-b px-4 py-4 sm:px-6">
-        <BackLink />
-        <div className="flex items-center gap-2">
-          {current && (
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">
-                {index + 1} / {total}
-              </span>
-              <span className="hidden sm:inline"> · {total - index} remaining</span>
-            </p>
-          )}
-          <ThemeToggle />
-        </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
-        {error && total === 0 && (
-          <div className="space-y-4 py-12 text-center">
-            <p className="text-sm text-destructive">{error}</p>
-            <Button variant="outline" onClick={() => fetchDueCards()}>
-              Try again
-            </Button>
-          </div>
-        )}
-
-        {empty && (
-          <div className="space-y-4 py-12 text-center">
-            <h2 className="text-xl font-semibold">All caught up!</h2>
-            <p className="text-sm text-muted-foreground">
-              No cards are due right now. Come back later or add more cards to
-              your decks.
-            </p>
-            <Button asChild>
+    <ReviewShell progress={progress} footer={footer}>
+      {error && total === 0 && (
+        <div className="animate-in space-y-4 fade-in-0 duration-200">
+          <ErrorState
+            title="Couldn’t load your review"
+            message="We couldn’t fetch the cards that are due. Check your connection and try again."
+            detail={error}
+            onRetry={fetchDueCards}
+          />
+          <div className="text-center">
+            <Button variant="ghost" asChild>
               <Link to="/dashboard">Back to dashboard</Link>
             </Button>
           </div>
-        )}
+        </div>
+      )}
 
-        {finished && (
-          <div className="space-y-4 py-12 text-center">
-            <h2 className="text-xl font-semibold">Session complete!</h2>
-            <p className="text-sm text-muted-foreground">
+      {empty && (
+        <div className="animate-in fade-in-0 duration-200">
+          <EmptyState
+            icon={CircleCheck}
+            title="You’re all caught up"
+            description="No cards are due right now. Come back later, or add more cards to your decks."
+          >
+            <Button asChild>
+              <Link to="/dashboard">Back to dashboard</Link>
+            </Button>
+          </EmptyState>
+        </div>
+      )}
+
+      {finished && (
+        <div className="animate-in space-y-6 fade-in-0 duration-200 text-center">
+          <div>
+            <span
+              className="mx-auto flex size-12 items-center justify-center rounded-xl bg-success/10 text-success"
+              aria-hidden="true"
+            >
+              <CircleCheck className="size-6" />
+            </span>
+            <h2
+              ref={completionRef}
+              tabIndex={-1}
+              className="mt-4 text-xl font-semibold"
+            >
+              Review complete!
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               You reviewed {total} {total === 1 ? 'card' : 'cards'} this
               session. Nice work.
             </p>
+          </div>
+
+          {summary.length > 0 && (
+            <ul
+              className="flex flex-wrap justify-center gap-2"
+              aria-label="Session summary"
+            >
+              {summary.map((r) => (
+                <li
+                  key={r.value}
+                  className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground"
+                >
+                  {r.count} {r.label}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
             <Button asChild>
               <Link to="/dashboard">Back to dashboard</Link>
             </Button>
+            <Button variant="outline" asChild>
+              <Link to="/decks">Browse decks</Link>
+            </Button>
           </div>
-        )}
+        </div>
+      )}
 
-        {current && (
-          <div className="space-y-4">
-            {reviewError && (
-              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                {reviewError}
+      {current && (
+        <div className="space-y-4">
+          {reviewError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-center"
+            >
+              <p className="text-sm font-medium text-destructive">
+                Couldn’t save your rating
               </p>
+              <p className="mt-0.5 text-xs text-destructive">
+                {reviewError} — pick a rating to try again.
+              </p>
+            </div>
+          )}
+
+          {/* Persistent live region: text toggles on reveal so screen
+              readers hear it (a region inserted mid-flight often isn't). */}
+          <p role="status" className="sr-only">
+            {revealed ? 'Answer shown.' : ''}
+          </p>
+
+          <div
+            key={current.id}
+            className="animate-in space-y-4 fade-in-0 slide-in-from-bottom-2 duration-200 motion-reduce:animate-none"
+          >
+            <Flashcard
+              card={current}
+              index={index}
+              total={total}
+              revealed={revealed}
+              questionRef={questionRef}
+            />
+            {!revealed ? (
+              <Button
+                className="h-12 w-full text-base sm:h-11 sm:text-sm"
+                aria-keyshortcuts="Space"
+                onClick={() => setRevealed(true)}
+              >
+                Reveal Answer
+              </Button>
+            ) : (
+              <RatingButtons onSelect={handleRating} disabled={submitting} />
             )}
-            <Card>
-              <CardHeader>
-                <CardDescription>Question</CardDescription>
-                <CardTitle>{current.question}</CardTitle>
-              </CardHeader>
-              {revealed && (
-                <CardContent className="space-y-3">
-                  <div className="rounded-md bg-muted p-4">
-                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Answer
-                    </p>
-                    <p className="whitespace-pre-wrap text-sm">
-                      {current.answer}
-                    </p>
-                  </div>
-                  {current.source && (
-                    <p className="text-xs text-muted-foreground">
-                      Source: {current.source}
-                    </p>
-                  )}
-                </CardContent>
-              )}
-              <div className="px-6 pb-6">
-                {!revealed ? (
-                  <Button
-                    className="w-full"
-                    onClick={() => setRevealed(true)}
-                  >
-                    Show Answer
-                  </Button>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {RATINGS.map((rating) => (
-                      <Button
-                        key={rating.value}
-                        variant={rating.variant}
-                        disabled={submitting}
-                        onClick={() => handleRating(rating.value)}
-                      >
-                        {rating.label}
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </Card>
           </div>
-        )}
-      </main>
-    </div>
+        </div>
+      )}
+    </ReviewShell>
   )
 }

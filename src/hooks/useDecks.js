@@ -7,6 +7,16 @@ function withCardCount(deck) {
   return { ...rest, card_count: cards?.[0]?.count ?? 0 }
 }
 
+// Group the user's due cards by deck so every deck row gets a `due_count`
+// (used by the dashboard's Due Today stat and the deck-card due badges).
+function countDueByDeck(cards) {
+  const counts = new Map()
+  for (const card of cards) {
+    counts.set(card.deck_id, (counts.get(card.deck_id) || 0) + 1)
+  }
+  return counts
+}
+
 export function useDecks() {
   const { user } = useAuth()
   const [decks, setDecks] = useState([])
@@ -15,25 +25,42 @@ export function useDecks() {
 
   // Promise style (not async/await) so lint sees setState only in async
   // callbacks — keeps effects free of synchronous cascading renders.
+  // Two queries run together: deck rows (with total card counts) and the
+  // deck_ids of currently-due cards, merged into `due_count` per deck.
   const fetchDecks = useCallback(() => {
-    const query = user
+    const now = new Date().toISOString()
+    const deckQuery = user
       ? supabase
           .from('decks')
           .select('*, cards(count)')
           .order('created_at', { ascending: false })
       : Promise.resolve({ data: [], error: null })
-    return query.then(({ data, error }) => {
-      if (error) {
-        setError(error.message)
+    const dueQuery = user
+      ? supabase
+          .from('cards')
+          .select('deck_id')
+          .eq('user_id', user.id)
+          .lte('due', now)
+      : Promise.resolve({ data: [], error: null })
+    return Promise.all([deckQuery, dueQuery]).then(
+      ([deckResult, dueResult]) => {
+        const failure = deckResult.error || dueResult.error
+        if (failure) {
+          setError(failure.message)
+          setLoading(false)
+          return null
+        }
+        setError(null)
+        const dueByDeck = countDueByDeck(dueResult.data || [])
+        const list = (deckResult.data || []).map((deck) => ({
+          ...withCardCount(deck),
+          due_count: dueByDeck.get(deck.id) || 0,
+        }))
+        setDecks(list)
         setLoading(false)
-        return null
-      }
-      setError(null)
-      const list = data.map(withCardCount)
-      setDecks(list)
-      setLoading(false)
-      return list
-    })
+        return list
+      },
+    )
   }, [user])
 
   useEffect(() => {
@@ -56,7 +83,7 @@ export function useDecks() {
       setError(error.message)
       return { error }
     }
-    const deck = { ...data, card_count: 0 }
+    const deck = { ...data, card_count: 0, due_count: 0 }
     setDecks((prev) => [deck, ...prev])
     return { data: deck }
   }

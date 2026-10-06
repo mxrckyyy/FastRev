@@ -9,7 +9,7 @@ A free-tier flashcard app: paste or import your study material (PDF, images, doc
 - **AI card generation** — paste notes → 10–15 flashcards, editable before saving. Provider chain: **Google Gemini (`gemini-3.8-flash`) → Groq (`openai/gpt-oss-120b`) → Cerebras**, so hitting one free-tier limit falls through to the next
 - **Material import** — drop or pick a file on the Generate Cards page: **PDF** (text extracted locally in the browser with pdf.js), **images** (screenshots/photos of pages transcribed by your Gemini key), **`.docx`** (mammoth), or **`.txt`/`.md`** — imported text lands in the notes box for you to trim before generating
 - **Reviews** — one card at a time, rated Again / Hard / Good / Easy, scheduled by **FSRS** (`ts-fsrs`)
-- **Analytics** — retention rate, total reviews, current streak, cards learned, a 7-day due forecast (bar chart), 14-day review activity (line chart), and weakest decks by accuracy
+- **Analytics** — retention rate, total reviews, current streak, cards learned, highlights (due today, streak, weakest deck), a week-over-week activity trend, a 7-day due forecast (bar chart), 14-day review activity (line chart), a rating breakdown, and weakest decks by accuracy with progress bars
 - **Polish** — loading skeletons, empty states everywhere, global error boundary, mobile-first responsive layout
 
 ## Tech stack
