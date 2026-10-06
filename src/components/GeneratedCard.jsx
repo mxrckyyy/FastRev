@@ -214,7 +214,7 @@ export default function GeneratedCard({
             ref={(node) => registerEditButton?.(row.id, node)}
             onClick={() => onStartEdit(row.id)}
           >
-            <Pencil className="h-4 w-4" aria-hidden="true" />
+            <Pencil className="size-4" aria-hidden="true" />
           </Button>
           <Button
             type="button"
@@ -224,7 +224,7 @@ export default function GeneratedCard({
             aria-label={`Remove card ${number}`}
             onClick={() => onRemove(row.id)}
           >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
+            <Trash2 className="size-4" aria-hidden="true" />
           </Button>
         </div>
       </article>

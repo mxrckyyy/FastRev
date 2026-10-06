@@ -33,7 +33,7 @@ export default class ErrorBoundary extends Component {
         </div>
         <div className="flex gap-2">
           <Button onClick={this.handleReset}>
-            <RotateCw className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            <RotateCw className="mr-1.5 size-4" aria-hidden="true" />
             Try again
           </Button>
           <Button variant="outline" onClick={() => window.location.reload()}>

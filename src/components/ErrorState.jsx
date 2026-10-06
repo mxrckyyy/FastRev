@@ -19,7 +19,7 @@ export default function ErrorState({
     <div
       role="alert"
       className={cn(
-        'flex flex-col items-center justify-center rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center',
+        'flex animate-in flex-col items-center justify-center rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center fade-in-0 duration-200 motion-reduce:animate-none',
         className,
       )}
     >

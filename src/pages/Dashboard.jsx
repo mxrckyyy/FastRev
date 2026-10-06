@@ -324,7 +324,7 @@ export default function Dashboard() {
             createDeck={createDeck}
             trigger={
               <Button size="lg">
-                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                <Plus className="mr-2 size-4" aria-hidden="true" />
                 Create Deck
               </Button>
             }

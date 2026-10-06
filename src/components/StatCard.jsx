@@ -46,12 +46,16 @@ export function StatCard({
           {loading ? (
             <Skeleton className="h-7 w-14" />
           ) : (
-            <p className="text-2xl font-semibold tabular-nums">{value}</p>
+            <p className="animate-in text-2xl font-semibold tabular-nums fade-in-0 duration-200 motion-reduce:animate-none">
+              {value}
+            </p>
           )}
           {loading ? (
             <Skeleton className="h-3 w-24" />
           ) : (
-            <p className="text-xs text-muted-foreground">{caption}</p>
+            <p className="animate-in text-xs text-muted-foreground fade-in-0 duration-200 motion-reduce:animate-none">
+              {caption}
+            </p>
           )}
         </div>
       </div>

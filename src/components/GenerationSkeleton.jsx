@@ -1,4 +1,4 @@
-import { RefreshCw } from 'lucide-react'
+import { LoaderCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 
 /**
@@ -16,8 +16,8 @@ export default function GenerationSkeleton({ count = 4 }) {
         role="status"
         className="flex items-center gap-2 text-sm font-medium text-foreground"
       >
-        <RefreshCw
-          className="h-4 w-4 shrink-0 animate-spin text-primary"
+        <LoaderCircle
+          className="size-4 shrink-0 animate-spin text-primary motion-reduce:animate-none"
           aria-hidden="true"
         />
         Generating review cards…

@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Plus, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,6 +52,20 @@ export default function DeckCard({ deck, onDelete }) {
     navigate(`/decks/${deck.id}`)
   }
 
+  // Deleting is confirmed by the AlertDialog; the result is confirmed by a
+  // toast (the card itself just disappears from the grid). A failure also
+  // surfaces through the page's ErrorState — the toast anchors it to the
+  // action the user just took.
+  function handleDelete() {
+    onDelete(deck.id).then(({ error }) => {
+      if (error) {
+        toast.error(`Couldn’t delete “${deck.name}” — try again.`)
+      } else {
+        toast.success(`Deck “${deck.name}” deleted`)
+      }
+    })
+  }
+
   return (
     <Card
       className="h-full cursor-pointer p-4 transition hover:-translate-y-0.5 hover:shadow-sm hover:ring-primary/40 focus-within:ring-primary/40"
@@ -94,7 +109,7 @@ export default function DeckCard({ deck, onDelete }) {
                     aria-label={`Delete deck ${deck.name}`}
                     onClick={stopPropagation}
                   >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    <Trash2 className="size-4" aria-hidden="true" />
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
@@ -107,7 +122,7 @@ export default function DeckCard({ deck, onDelete }) {
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => onDelete(deck.id)}>
+                    <AlertDialogAction onClick={handleDelete}>
                       Delete deck
                     </AlertDialogAction>
                   </AlertDialogFooter>

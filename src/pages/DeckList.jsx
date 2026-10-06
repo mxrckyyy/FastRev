@@ -43,7 +43,7 @@ export default function DeckList() {
             createDeck={createDeck}
             trigger={
               <Button size="lg">
-                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                <Plus className="mr-2 size-4" aria-hidden="true" />
                 Create Deck
               </Button>
             }
@@ -69,7 +69,7 @@ export default function DeckList() {
           createDeck={createDeck}
           trigger={
             <Button>
-              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+              <Plus className="mr-2 size-4" aria-hidden="true" />
               New Deck
             </Button>
           }

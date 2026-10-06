@@ -11,6 +11,9 @@ Browser (React 19 SPA, static on Vercel)
 ├── AuthProvider (useAuth)      Supabase auth session, user/loading
 ├── AppShell                    chrome for standard routes (sidebar/top/bottom nav)
 │                               focus-mode routes are siblings, not children
+│                               keyed 150ms fade on route change (Phase 8)
+├── Toaster (sonner)            global success/error toasts (Phase 8) — bottom-center,
+│                               5rem offset, unstyled + token classNames
 ├── Data hooks                  useDecks / useCards / useReviews / useAnalytics
 ├── Design system               src/index.css tokens + shadcn/ui components
 └── Client-side integrations
@@ -62,6 +65,9 @@ BrowserRouter (main.jsx)
   `AppShell` inside `ProtectedLayout`.
 - `src/lib/nav.js` is the single source for navigation (sidebar, bottom bar,
   hamburger, top-bar titles all read `NAV_ITEMS` / `getPageMeta`).
+- Route transitions: `AppShell` wraps `<Outlet/>` in a `key={pathname}` fade
+  (`animate-in fade-in-0 duration-150` + `motion-reduce:animate-none`); focus
+  routes sit outside the shell and keep their own entrance animations.
 
 ## 4. Auth architecture
 
@@ -81,9 +87,18 @@ GuestRoute (/auth)      ProtectedLayout (everything else)
   `needsConfirmation = !session` (email confirmation flow).
 - Successful login updates `user` → `GuestRoute` redirects to `/dashboard`;
   sign-out (UserMenu) flips `user` → protected routes redirect to `/auth`.
-- `Auth.jsx` is the only auth UI: single mode-driven form
-  (`mode: login | signup`), client-side field validation, Supabase errors mapped
-  to friendly copy in the page (UI layer only — `useAuth` stays a thin API).
+- `Auth.jsx` is the only auth UI (Phase 7): default export owns form state,
+  client-side validation (`lib/authForm.js` — `validateAuthEmail`,
+  `validateAuthPassword` with the 6-char minimum only at signup) and the
+  Supabase calls; the exported `AuthView({ … })` is a stateless view. One
+  mode-driven shared form — labeled `h-10` inputs (autocomplete email /
+  current-password / new-password), show/hide password, inline field errors
+  (`aria-invalid` + `aria-describedby`), friendly `role="alert"` server errors
+  via `friendlyAuthError` (unknown messages → generic copy), loading =
+  inputs+button disabled with mode-specific busy labels, `needsConfirmation` →
+  `role="status"` confirmation panel, bottom switch link for the mode change.
+  Focus: first invalid field on submit, mode heading after a switch, submit
+  button after a server error.
 - **Out of scope / not implemented:** password reset, social login, remember-me.
 
 ## 5. Review & FSRS architecture
@@ -140,6 +155,9 @@ plus loading/error/no-history states.
 - **Single token file:** `src/index.css` — Tailwind v4 `@theme inline` maps every
   token to a utility (`--color-primary` → `bg-primary`, …). Light in `:root`,
   dark in `.dark`; no `tailwind.config.js`.
+- **Boundary tokens:** `--border` = 1 px structural hairline (dividers, card
+  edges); `--input` = control boundaries (inputs, textareas, select, outline
+  buttons), ≥3:1 vs surfaces in both themes (WCAG 1.4.11 — Final QA fix).
 - **Component layer:** shadcn/ui primitives under `src/components/ui/`
   (JSX, `cn` = tailwind-merge) — extend by adding utilities/classes, never by
   hardcoding colors.
@@ -147,8 +165,20 @@ plus loading/error/no-history states.
   loads; `lib/theme.js` helpers + `ThemeToggle` persist/sync (`fastrev_theme`,
   cross-tab).
 - **State-driven color tokens:** success/warning/danger (reviews, errors,
-  analytics); `destructive` is an alias so stock shadcn classes resolve to the
-  same token.
+  analytics); `destructive` is an alias so stock shadcn classes resolve to
+  the same token.
+- **Motion (Phase 8):** tw-animate-css + CSS transitions only — framer-motion
+  is not installed. Global `prefers-reduced-motion` clamp in `index.css`
+  (0.01 ms) is the backstop; moving parts also carry `motion-reduce:*`.
+  Entrances: route fade (shell), `fade-in-0 duration-200` on EmptyState /
+  ErrorState / StatCard values, existing dialog/dropdown open-close animations.
+- **Feedback (Phase 8):** one `<Toaster>` (sonner, `main.jsx`) styled entirely
+  with token utilities — call sites import `toast` directly; policy = CRUD/save
+  successes + delete-failure errors only, never for validation or panel-managed
+  failures. Async submits outside Auth use `components/LoadingButton.jsx`
+  (disabled + `aria-busy` + `LoaderCircle` + action-specific `loadingLabel`);
+  skeletons are shape-mirroring (DeckDetail gained a real one); no fake progress
+  anywhere.
 
 ## 9. External services & configuration
 
@@ -163,7 +193,11 @@ plus loading/error/no-history states.
 
 ## 10. Build & quality
 
-- Vite 8 build; Recharts makes the main chunk ~1 MB (known, acceptable).
-- oxlint: 2 tolerated pre-existing warnings in shadcn files only.
+- Vite 8 build; Recharts makes the main chunk ~1.15 MB (known, acceptable).
+- oxlint: 1 tolerated pre-existing warning (`ui/button.jsx` fast-refresh; the
+  second disappeared with Final QA's deletion of the dead `ui/tabs.jsx`).
 - Every UI phase validates: lint → build → SSR smoke → contrast audit →
   dev-server routes → built-CSS utility check (temp scripts, deleted after).
+- Latest (Final QA): build ✓ · 49/49 SSR smoke · 84/84 contrast pairs (2
+  documented INFO: the `--border` hairline at 1.29/1.42) · 9 routes + 13 module
+  transforms HTTP 200. Interactive browser QA still pending — see AGENTS.md risks.

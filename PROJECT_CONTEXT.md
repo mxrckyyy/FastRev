@@ -19,11 +19,15 @@ FastRev — a free-tier spaced-repetition flashcard web app for students.
 
 ## Current phase
 
-**Phase 7 — Authentication UI/UX redesign** (in progress).
+**Phase 9 — not yet defined.**
 Phases 0–6 are complete: project setup, Supabase schema/auth, deck CRUD, review +
 FSRS, AI generation, analytics + docs, schema repair, material import, and UI/UX
-plan Phases 1–6 (design system, app shell, dashboard/decks, review focus mode,
-upload, analytics). See `AGENTS.md` → Completed Phases.
+plan Phases 1–8 (design system, app shell, dashboard/decks, review focus mode,
+upload, analytics, authentication, interaction/motion/feedback). **App-wide Final
+QA & Polish (audit & fix pass) completed 2026-10-06** — control-boundary contrast
+(`--input`), type-scale fixes, dead `tabs.jsx` removed, ARIA/landmark gap-fills,
+icon-size + error-tint consistency, chart text alternatives; no functionality
+changed. See `AGENTS.md` → Completed Phases + `architecture.md` → § Final QA & Polish.
 
 ## Tech stack (locked)
 
@@ -36,6 +40,7 @@ upload, analytics). See `AGENTS.md` → Completed Phases.
 | Scheduling | ts-fsrs (FSRS algorithm)                                           |
 | Routing    | react-router-dom v7                                                |
 | Charts     | recharts                                                           |
+| Toasts     | sonner (Phase 8; framer-motion deliberately **not** added)         |
 | Tooling    | npm, oxlint (`npm run lint`), Vite build                           |
 | Hosting    | Vercel (static)                                                    |
 
@@ -58,7 +63,8 @@ FastRev/
 │   ├── migrations/0001_initial_schema.sql
 │   └── README.md                # how to run/verify the schema
 └── src/
-    ├── main.jsx                 # BrowserRouter + AuthProvider + ErrorBoundary
+    ├── main.jsx                 # ErrorBoundary + BrowserRouter + AuthProvider
+    │                            #   + global sonner Toaster
     ├── App.jsx                  # routes (see below)
     ├── index.css                # THE design system: all tokens, themes, base rules
     ├── components/
@@ -66,11 +72,12 @@ FastRev/
     │   ├── Sidebar.jsx, TopBar.jsx, MobileNav.jsx, MobileMenu.jsx, UserMenu.jsx
     │   ├── Breadcrumbs.jsx, StatCard.jsx, DeckCard.jsx, CreateDeckDialog.jsx
     │   ├── EmptyState.jsx, ErrorState.jsx, ErrorBoundary.jsx, ThemeToggle.jsx
+    │   ├── LoadingButton.jsx     # shared async submit (spinner + aria-busy)
     │   ├── ReviewShell.jsx, ReviewProgress.jsx, Flashcard.jsx,
     │   │   RatingButtons.jsx, ShortcutHint.jsx          # review focus mode
     │   ├── GeneratedCard.jsx, GenerationSkeleton.jsx    # upload preview
     │   └── ui/                  # shadcn components (button, card, input, dialog,
-    │                            #   alert-dialog, tabs, textarea, checkbox, badge,
+    │                            #   alert-dialog, textarea, checkbox, badge,
     │                            #   skeleton, dropdown-menu)
     ├── hooks/
     │   ├── useAuth.js           # AuthProvider + useAuth (signIn/signUp/signOut)
@@ -83,9 +90,10 @@ FastRev/
     │   ├── nav.js               # NAV_ITEMS single source + link class builders
     │   ├── ratings.js           # RATINGS config (Again/Hard/Good/Easy, keys 1–4)
     │   ├── theme.js             # dark-mode read/apply/toggle/subscribe
+    │   ├── authForm.js          # auth validation + Supabase error → friendly copy
     │   └── utils.js             # cn()
     └── pages/
-        ├── Auth.jsx             # login/signup (Phase 7 target)
+        ├── Auth.jsx             # login/signup — Phase 7 screen (AuthView + state)
         ├── Dashboard.jsx, Decks.jsx, DeckDetail.jsx, Review.jsx,
         ├── Upload.jsx, Analytics.jsx, Settings.jsx, SettingsPage.jsx
 ```
@@ -118,7 +126,16 @@ unauthenticated users to `/auth`. `GuestRoute` mirrors it (signed-in → `/dashb
    - `signUp(email, password)` → `signUp` → `{ error, needsConfirmation }`
      (`needsConfirmation = !session`; Supabase email confirmation is ON by default).
    - All three are async and return `{ error }`.
-3. `src/pages/Auth.jsx` is the single login/signup screen (mode-driven form).
+3. `src/pages/Auth.jsx` is the single login/signup screen (Phase 7): default
+   export owns state/validation/Supabase calls; exported `AuthView({ … })` is
+   the presentational view. One mode-driven shared form (`mode: login |
+   signup`): inline field errors from `lib/authForm.js`
+   (`validateAuthEmail` / `validateAuthPassword` — 6-char minimum only at
+   signup), Supabase errors mapped by `friendlyAuthError` into a `role="alert"`
+   box (raw provider text never shown), show/hide password toggle,
+   loading/disabled submit ("Signing in…" / "Creating account…"), a
+   `role="status"` confirmation panel when `needsConfirmation`, and a bottom
+   switch link instead of tabs.
 4. On successful auth the provider updates `user`; `GuestRoute` redirects to
    `/dashboard`; sign-out (UserMenu) returns to `/auth`.
 
@@ -138,10 +155,21 @@ Google/social OAuth, remember-me, profile editing.
 - Type scale: 12/14/16/18/24/32/48 (`text-xs` … `text-3xl`). Weights: 400 body,
   500/600 headings/actions. Font: Inter Variable.
 - Radius: base `0.75rem`, multipliers (`rounded-lg` cards, `rounded-xl` dialogs…).
+- **Control boundaries:** `--border` is the 1 px structural hairline (~1.3:1, by
+  design); `--input` draws input/textarea/select/outline-button edges and is
+  calibrated ≥3:1 vs all surfaces in both themes (WCAG 1.4.11 — Final QA fix).
 - Dark mode: `.dark` on `<html>`, bootstrapped pre-paint by inline script in
   `index.html`, persisted in localStorage `fastrev_theme` (`src/lib/theme.js`).
-- Animation: `tw-animate-css` only (no framer-motion); global
-  `prefers-reduced-motion` clamp in `index.css`.
+- Animation: `tw-animate-css` + CSS transitions only (**framer-motion is not
+  installed and must not be added**); global `prefers-reduced-motion` clamp in
+  `index.css`, plus explicit `motion-reduce:*` variants on moving parts.
+- Feedback (Phase 8): global **sonner** `<Toaster>` in `main.jsx` —
+  bottom-center, 5rem offset (clears the mobile bottom nav), `unstyled` +
+  token classNames, success/error lucide icons. Toasts are narrow: 6 CRUD/save
+  successes + the 2 delete-failure errors only; validation/panel errors stay
+  inline (full policy in `architecture.md` § Interaction). Async submits use
+  `LoadingButton` (spinner + `aria-busy` + disabled); route changes fade in
+  150 ms via the keyed wrapper in `AppShell`.
 - Layout rule: **AppShell owns `<h1>` and the single `<main>`** — pages render
   content with `<h2>`+. Exceptions: focus-mode routes (`/review`) render their own
   chrome; full-screen routes (`/auth`) have no shell.
@@ -154,7 +182,7 @@ Google/social OAuth, remember-me, profile editing.
 ```bash
 npm run dev      # Vite dev server on :5173
 npm run build    # production build (must pass before finishing a phase)
-npm run lint     # oxlint — only the 2 pre-existing shadcn warnings allowed
+npm run lint     # oxlint — only the 1 pre-existing warning allowed (button.jsx fast-refresh)
 npm run preview  # serve the production build
 ```
 
@@ -163,6 +191,8 @@ lint → build → SSR render smoke via temp `ssr-smoke.mjs` (Vite `ssrLoadModul
 `renderToString` + check assertions) → contrast audit via temp `contrast-audit.mjs`
 (oklch → WCAG ratio; ≥4.5 text / ≥3 UI, light + dark) → dev-server route/module
 HTTP 200s → built-CSS contains new utilities → delete temp scripts.
+Latest run (Final QA): lint 1 warning · build ✓ · 49/49 smoke · 84/84 contrast
+(+2 documented INFO) · 9 routes + 13 modules HTTP 200.
 
 ## Conventions worth knowing
 
@@ -175,6 +205,9 @@ HTTP 200s → built-CSS contains new utilities → delete temp scripts.
 - shadcn CLI runs locally: `node node_modules/shadcn/dist/index.js <cmd>` (never `npx`).
 - Icons: lucide-react **v1.52** — legacy names are gone
   (`BarChart3` → `ChartColumn`, `Loader2` → `LoaderCircle`, `CheckCircle2` → `CircleCheck`).
+- Toasts: call sites import `{ toast } from 'sonner'` directly (no wrapper);
+  `LoaderCircle` is the only spinner in the app; Auth keeps its own inline
+  loading pattern (do not "convert" it — Phase 7 smoke asserts that markup).
 - Docs convention: `AGENTS.md` + `architecture.md` are the canonical long-form
   docs (updated every phase); this file + `PROJECT_ARCHITECTURE.md` are the
   current-state summaries.

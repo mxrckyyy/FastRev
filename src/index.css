@@ -129,8 +129,12 @@
     --accent: oklch(0.955 0.008 264);
     --accent-foreground: oklch(0.21 0.015 264);
 
+    /* --border stays hairline (dividers, card edges — decorative grouping).
+       --input is the CONTROL boundary: inputs, textareas, selects, outline
+       buttons. WCAG 1.4.11 wants >= 3:1 for control boundaries, so it is a
+       deliberately darker step (3.36:1 vs card, 3.22:1 vs background). */
     --border: oklch(0.915 0.006 264);
-    --input: oklch(0.915 0.006 264);
+    --input: oklch(0.64 0.006 264);
     --ring: oklch(0.52 0.11 264);
 
     /* Solid status fills pair with a light foreground. */
@@ -183,8 +187,11 @@
     --accent: oklch(0.30 0.012 264);
     --accent-foreground: oklch(0.955 0.004 264);
 
+    /* Same split as light: --border hairline, --input a real control edge
+       (3.57:1 vs card, 3.88:1 vs background, 3.20:1 vs elevated/popover —
+       dialogs are the tightest surface because inputs open inside them). */
     --border: oklch(1 0 0 / 12%);
-    --input: oklch(1 0 0 / 15%);
+    --input: oklch(1 0 0 / 38%);
     --ring: oklch(0.65 0.11 264);
 
     --success: oklch(0.68 0.13 155);
@@ -252,4 +259,14 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Toast (sonner) focus: the toast listitem is focusable, and sonner paints
+   its default focus ring with a fixed black alpha that disappears against
+   dark surfaces. Outline with our ring token instead; the doubled attribute
+   selector outranks sonner's runtime-injected stylesheet whatever the
+   injection order is. */
+[data-sonner-toast][data-sonner-toast]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }

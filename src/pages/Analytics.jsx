@@ -167,7 +167,13 @@ function ForecastCard({ forecast }) {
         {empty ? (
           <InlineEmpty>Nothing due in the next 7 days. Nicely done.</InlineEmpty>
         ) : (
-          <div className="h-56 w-full">
+          <div
+            className="h-56 w-full"
+            role="img"
+            aria-label={`Cards due per day for the next 7 days: ${forecast
+              .map((day) => `${day.label}, ${day.count}`)
+              .join('; ')}.`}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={forecast}
@@ -180,13 +186,13 @@ function ForecastCard({ forecast }) {
                 />
                 <XAxis
                   dataKey="label"
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 12 }}
                   tickLine={false}
                   axisLine={false}
                   interval={0}
                 />
                 <YAxis
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 12 }}
                   tickLine={false}
                   axisLine={false}
                   allowDecimals={false}
@@ -229,7 +235,13 @@ function ActivityCard({ activity, trendPct }) {
         {empty ? (
           <InlineEmpty>No reviews in the last 14 days yet.</InlineEmpty>
         ) : (
-          <div className="h-56 w-full">
+          <div
+            className="h-56 w-full"
+            role="img"
+            aria-label={`Reviews per day over the last 14 days: ${activity
+              .map((day) => `${day.label}, ${day.count}`)
+              .join('; ')}.`}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={activity}
@@ -242,13 +254,13 @@ function ActivityCard({ activity, trendPct }) {
                 />
                 <XAxis
                   dataKey="label"
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 12 }}
                   tickLine={false}
                   axisLine={false}
                   interval={1}
                 />
                 <YAxis
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 12 }}
                   tickLine={false}
                   axisLine={false}
                   allowDecimals={false}

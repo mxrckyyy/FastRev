@@ -253,7 +253,7 @@ export default function Review() {
           {reviewError && (
             <div
               role="alert"
-              className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-center"
+              className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-center"
             >
               <p className="text-sm font-medium text-destructive">
                 Couldn’t save your rating

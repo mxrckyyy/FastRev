@@ -59,7 +59,16 @@ export default function AppShell() {
           ref={scrollRef}
           className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
         >
-          <Outlet />
+          {/* Keyed by route so each page fades in on navigation (one quiet
+              150ms opacity move — no slide/scale, no layout animation).
+              The key remounts the subtree, which route changes already do;
+              motion-reduce turns the fade off. */}
+          <div
+            key={pathname}
+            className="animate-in fade-in-0 duration-150 motion-reduce:animate-none"
+          >
+            <Outlet />
+          </div>
         </main>
 
         <MobileNav />

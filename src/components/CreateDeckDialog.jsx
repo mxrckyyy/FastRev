@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
+import LoadingButton from '@/components/LoadingButton'
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,7 @@ export default function CreateDeckDialog({ createDeck, trigger }) {
         setFormError(error.message)
         return
       }
+      toast.success(`Deck “${name.trim()}” created`)
       setOpen(false)
       setName('')
       setDescription('')
@@ -82,12 +84,18 @@ export default function CreateDeckDialog({ createDeck, trigger }) {
             />
           </div>
           {formError && (
-            <p className="text-sm text-destructive">{formError}</p>
+            <p role="alert" className="text-sm text-destructive">
+              {formError}
+            </p>
           )}
           <DialogFooter>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? 'Creating…' : 'Create deck'}
-            </Button>
+            <LoadingButton
+              type="submit"
+              loading={submitting}
+              loadingLabel="Creating…"
+            >
+              Create deck
+            </LoadingButton>
           </DialogFooter>
         </form>
       </DialogContent>

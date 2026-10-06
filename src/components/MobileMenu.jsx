@@ -30,7 +30,9 @@ export default function MobileMenu({ open, onOpenChange }) {
           </DialogDescription>
         </DialogHeader>
 
-        <nav aria-label="Primary">
+        {/* Labelled "Main" like the desktop sidebar — the bottom bar keeps
+            "Primary", so no two visible landmarks share a name. */}
+        <nav aria-label="Main">
           <ul className="space-y-1">
             {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
               <li key={to}>

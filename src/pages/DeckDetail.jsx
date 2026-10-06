@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,7 +31,9 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import LoadingButton from '@/components/LoadingButton'
 import { useCards } from '@/hooks/useCards'
 import { useDecks } from '@/hooks/useDecks'
 
@@ -80,6 +83,40 @@ function CardFormFields({ form, setForm, idPrefix }) {
 
 const emptyForm = { question: '', answer: '', source: '' }
 
+/** Mirrors the deck header + card list shape so nothing jumps on load. */
+function DeckDetailSkeleton() {
+  return (
+    <div
+      className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6"
+      aria-busy="true"
+    >
+      <span className="sr-only" role="status">
+        Loading deck…
+      </span>
+      <div aria-hidden="true" className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-3.5 w-32" />
+          </div>
+          <Skeleton className="h-8 w-28 rounded-lg" />
+        </div>
+        {[0, 1, 2].map((index) => (
+          <div
+            key={index}
+            className="rounded-xl border border-border bg-card p-4 shadow-sm"
+          >
+            <div className="space-y-2.5">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3.5 w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function DeckDetail() {
   const { id } = useParams()
   const { decks, loading: decksLoading, error: decksError } = useDecks()
@@ -121,6 +158,7 @@ export default function DeckDetail() {
         setAddFormError(error.message)
         return
       }
+      toast.success('Card added')
       setAddOpen(false)
       setAddForm(emptyForm)
     } finally {
@@ -158,18 +196,27 @@ export default function DeckDetail() {
         setEditFormError(error.message)
         return
       }
+      toast.success('Card updated')
       cancelEditing()
     } finally {
       setSaving(false)
     }
   }
 
+  // Deletion has no form to show a result in, so the outcome is a toast
+  // (the row itself just disappears; failures also reach the page error line).
+  function handleDeleteCard(card) {
+    deleteCard(card.id).then(({ error }) => {
+      if (error) {
+        toast.error('Couldn’t delete that card — try again.')
+      } else {
+        toast.success('Card deleted')
+      }
+    })
+  }
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
-    )
+    return <DeckDetailSkeleton />
   }
 
   return (
@@ -177,7 +224,7 @@ export default function DeckDetail() {
       <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6">
         {!deck ? (
           <div className="space-y-4">
-            <p className="text-sm text-destructive">
+            <p role="alert" className="text-sm text-destructive">
               {error ? error : 'Deck not found.'}
             </p>
             <Button variant="outline" asChild>
@@ -197,7 +244,7 @@ export default function DeckDetail() {
               <Dialog open={addOpen} onOpenChange={setAddOpen}>
                 <DialogTrigger asChild>
                   <Button>
-                    <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                    <Plus className="mr-2 size-4" aria-hidden="true" />
                     Add Card
                   </Button>
                 </DialogTrigger>
@@ -215,19 +262,29 @@ export default function DeckDetail() {
                       idPrefix="add"
                     />
                     {addFormError && (
-                      <p className="text-sm text-destructive">{addFormError}</p>
+                      <p role="alert" className="text-sm text-destructive">
+                        {addFormError}
+                      </p>
                     )}
                     <DialogFooter>
-                      <Button type="submit" disabled={adding}>
-                        {adding ? 'Adding…' : 'Add card'}
-                      </Button>
+                      <LoadingButton
+                        type="submit"
+                        loading={adding}
+                        loadingLabel="Adding…"
+                      >
+                        Add card
+                      </LoadingButton>
                     </DialogFooter>
                   </form>
                 </DialogContent>
               </Dialog>
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
 
             {cards.length === 0 && !error && (
               <p className="text-sm text-muted-foreground">
@@ -235,9 +292,10 @@ export default function DeckDetail() {
               </p>
             )}
 
-            <div className="space-y-4">
+            <ul className="space-y-4">
               {cards.map((card) => (
-                <Card key={card.id}>
+                <li key={card.id}>
+                  <Card>
                   {editingId === card.id ? (
                     <CardContent className="pt-6">
                       <form onSubmit={handleSave} className="space-y-4">
@@ -247,7 +305,7 @@ export default function DeckDetail() {
                           idPrefix={`edit-${card.id}`}
                         />
                         {editFormError && (
-                          <p className="text-sm text-destructive">
+                          <p role="alert" className="text-sm text-destructive">
                             {editFormError}
                           </p>
                         )}
@@ -260,9 +318,13 @@ export default function DeckDetail() {
                           >
                             Cancel
                           </Button>
-                          <Button type="submit" disabled={saving}>
-                            {saving ? 'Saving…' : 'Save changes'}
-                          </Button>
+                          <LoadingButton
+                            type="submit"
+                            loading={saving}
+                            loadingLabel="Saving…"
+                          >
+                            Save changes
+                          </LoadingButton>
                         </div>
                       </form>
                     </CardContent>
@@ -280,7 +342,7 @@ export default function DeckDetail() {
                               aria-label="Edit card"
                               onClick={() => startEditing(card)}
                             >
-                              <Pencil className="h-4 w-4" aria-hidden="true" />
+                              <Pencil className="size-4" aria-hidden="true" />
                             </Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
@@ -290,7 +352,7 @@ export default function DeckDetail() {
                                   aria-label="Delete card"
                                 >
                                   <Trash2
-                                    className="h-4 w-4"
+                                    className="size-4"
                                     aria-hidden="true"
                                   />
                                 </Button>
@@ -308,7 +370,7 @@ export default function DeckDetail() {
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => deleteCard(card.id)}
+                                    onClick={() => handleDeleteCard(card)}
                                   >
                                     Delete card
                                   </AlertDialogAction>
@@ -329,8 +391,9 @@ export default function DeckDetail() {
                     </>
                   )}
                 </Card>
+                </li>
               ))}
-            </div>
+            </ul>
           </>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   FileUp,
@@ -8,6 +8,7 @@ import {
   Sparkles,
   TriangleAlert,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -22,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import EmptyState from '@/components/EmptyState'
 import GeneratedCard from '@/components/GeneratedCard'
 import GenerationSkeleton from '@/components/GenerationSkeleton'
+import LoadingButton from '@/components/LoadingButton'
 import { useCards } from '@/hooks/useCards'
 import { useDecks } from '@/hooks/useDecks'
 import {
@@ -77,7 +79,7 @@ function friendlyMessage(error) {
 // Native <select> (no shadcn Select installed) styled from the same tokens as
 // the Input component so both controls read identically in either theme.
 const selectClasses =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30'
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30'
 
 export default function Upload() {
   const navigate = useNavigate()
@@ -99,7 +101,6 @@ export default function Upload() {
   const [saveError, setSaveError] = useState(null)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [toast, setToast] = useState(null)
 
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState(null)
@@ -108,12 +109,6 @@ export default function Upload() {
   const fileInputRef = useRef(null)
   const addCardButtonRef = useRef(null)
   const editButtonsRef = useRef(new Map())
-
-  useEffect(() => {
-    if (!toast) return undefined
-    const timer = setTimeout(() => setToast(null), 3000)
-    return () => clearTimeout(timer)
-  }, [toast])
 
   function handleSettingsChange(open) {
     setSettingsOpen(open)
@@ -296,7 +291,9 @@ export default function Upload() {
     }
 
     const deck = decks.find((candidate) => candidate.id === deckId)
-    setToast(
+    // The global toast survives the redirect below (the old in-page toast
+    // disappeared the moment the route changed).
+    toast.success(
       `${savedIds.size} ${savedIds.size === 1 ? 'card' : 'cards'} saved to ${deck?.name || 'deck'}`,
     )
     setTimeout(() => navigate(`/decks/${deckId}`), 1000)
@@ -317,7 +314,7 @@ export default function Upload() {
       <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-semibold">
-            <Sparkles className="h-5 w-5" aria-hidden="true" />
+            <Sparkles className="size-5" aria-hidden="true" />
             Generate cards with AI
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -407,32 +404,23 @@ export default function Upload() {
                     )}
                   >
                     <FileUp
-                      className="h-5 w-5 text-muted-foreground"
+                      className="size-5 text-muted-foreground"
                       aria-hidden="true"
                     />
                     <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
                       <span className="text-muted-foreground">
                         Drag a file here, or
                       </span>
-                      <Button
+                      <LoadingButton
                         type="button"
                         variant="outline"
                         size="sm"
+                        loading={importing}
+                        loadingLabel="Importing…"
                         onClick={() => fileInputRef.current?.click()}
-                        disabled={importing}
                       >
-                        {importing ? (
-                          <>
-                            <RefreshCw
-                              className="mr-1.5 h-3.5 w-3.5 animate-spin"
-                              aria-hidden="true"
-                            />
-                            Importing…
-                          </>
-                        ) : (
-                          'Browse files'
-                        )}
-                      </Button>
+                        Browse files
+                      </LoadingButton>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Supported: {SUPPORTED_INPUTS}
@@ -453,7 +441,7 @@ export default function Upload() {
                     >
                       <p className="flex items-start gap-2 text-sm text-destructive">
                         <TriangleAlert
-                          className="mt-0.5 h-4 w-4 shrink-0"
+                          className="mt-0.5 size-4 shrink-0"
                           aria-hidden="true"
                         />
                         {friendlyMessage(importError)}
@@ -467,7 +455,7 @@ export default function Upload() {
                           onClick={() => setSettingsOpen(true)}
                         >
                           <KeyRound
-                            className="mr-1.5 h-3.5 w-3.5"
+                            className="mr-1.5 size-3.5"
                             aria-hidden="true"
                           />
                           Open Settings
@@ -480,7 +468,7 @@ export default function Upload() {
                           onClick={() => fileInputRef.current?.click()}
                         >
                           <FileUp
-                            className="mr-1.5 h-3.5 w-3.5"
+                            className="mr-1.5 size-3.5"
                             aria-hidden="true"
                           />
                           Choose another file
@@ -489,35 +477,24 @@ export default function Upload() {
                     </div>
                   )}
                   {importMsg && !importError && (
-                    <p className="text-xs font-medium text-foreground">
+                    <p role="status" className="text-xs font-medium text-foreground">
                       {importMsg}
                     </p>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <Button
+                  <LoadingButton
                     className="w-full"
                     size="lg"
                     onClick={handleGenerate}
                     disabled={!canGenerate}
-                    aria-busy={generating}
+                    loading={generating}
+                    loadingLabel="Generating…"
                   >
-                    {generating ? (
-                      <>
-                        <RefreshCw
-                          className="mr-2 h-4 w-4 animate-spin"
-                          aria-hidden="true"
-                        />
-                        Generating…
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Generate Cards
-                      </>
-                    )}
-                  </Button>
+                    <Sparkles className="mr-2 size-4" aria-hidden="true" />
+                    Generate Cards
+                  </LoadingButton>
                   {noKeys && (
                     <p className="text-xs text-muted-foreground">
                       No API key yet —{' '}
@@ -583,7 +560,7 @@ export default function Upload() {
                   >
                     <p className="flex items-start gap-2 text-sm text-destructive">
                       <TriangleAlert
-                        className="mt-0.5 h-4 w-4 shrink-0"
+                        className="mt-0.5 size-4 shrink-0"
                         aria-hidden="true"
                       />
                       {friendlyMessage(genError)}
@@ -598,7 +575,7 @@ export default function Upload() {
                           onClick={() => setSettingsOpen(true)}
                         >
                           <KeyRound
-                            className="mr-1.5 h-3.5 w-3.5"
+                            className="mr-1.5 size-3.5"
                             aria-hidden="true"
                           />
                           Open Settings
@@ -612,7 +589,7 @@ export default function Upload() {
                           onClick={handleGenerate}
                         >
                           <RefreshCw
-                            className="mr-1.5 h-3.5 w-3.5"
+                            className="mr-1.5 size-3.5"
                             aria-hidden="true"
                           />
                           Retry
@@ -625,7 +602,7 @@ export default function Upload() {
                           onClick={handleGenerate}
                         >
                           <RefreshCw
-                            className="mr-1.5 h-3.5 w-3.5"
+                            className="mr-1.5 size-3.5"
                             aria-hidden="true"
                           />
                           Try again
@@ -696,7 +673,7 @@ export default function Upload() {
                           onClick={addRow}
                           ref={addCardButtonRef}
                         >
-                          <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                          <Plus className="mr-1.5 size-4" aria-hidden="true" />
                           Add blank card
                         </Button>
                         <p className="text-xs text-muted-foreground">
@@ -714,27 +691,25 @@ export default function Upload() {
                       </div>
 
                       <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-end">
-                        <Button
+                        <LoadingButton
                           type="button"
                           variant="outline"
-                          disabled={
-                            saving || !deckId || selectedValidCount === 0
-                          }
+                          disabled={!deckId || selectedValidCount === 0}
+                          loading={saving}
+                          loadingLabel="Saving…"
                           onClick={() => handleSave('selected')}
                         >
-                          {saving
-                            ? 'Saving…'
-                            : `Save Selected (${selectedValidCount})`}
-                        </Button>
-                        <Button
+                          Save Selected ({selectedValidCount})
+                        </LoadingButton>
+                        <LoadingButton
                           type="button"
-                          disabled={saving || !deckId || validCount === 0}
+                          disabled={!deckId || validCount === 0}
+                          loading={saving}
+                          loadingLabel="Saving…"
                           onClick={() => handleSave('all')}
                         >
-                          {saving
-                            ? 'Saving…'
-                            : `Save All (${validCount})`}
-                        </Button>
+                          Save All ({validCount})
+                        </LoadingButton>
                       </div>
 
                       {selectedValidCount === 0 && validCount > 0 && (
@@ -758,15 +733,6 @@ export default function Upload() {
       </div>
 
       <SettingsDialog open={settingsOpen} onOpenChange={handleSettingsChange} />
-
-      {toast && (
-        <div
-          role="status"
-          className="fixed inset-x-4 bottom-20 z-50 max-w-sm rounded-lg border bg-elevated px-4 py-3 text-sm shadow-lg sm:inset-x-auto sm:right-6 lg:bottom-6"
-        >
-          {toast}
-        </div>
-      )}
     </div>
   )
 }
