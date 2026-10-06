@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import MobileMenu from '@/components/MobileMenu'
 import MobileNav from '@/components/MobileNav'
+import RouteFallback from '@/components/RouteFallback'
 import Sidebar from '@/components/Sidebar'
 import TopBar from '@/components/TopBar'
 import { useDecks } from '@/hooks/useDecks'
@@ -62,12 +63,16 @@ export default function AppShell() {
           {/* Keyed by route so each page fades in on navigation (one quiet
               150ms opacity move — no slide/scale, no layout animation).
               The key remounts the subtree, which route changes already do;
-              motion-reduce turns the fade off. */}
+              motion-reduce turns the fade off. The Suspense boundary sits
+              HERE (inside the shell, not around it) so lazy route chunks
+              load without ever unmounting the chrome — no layout shift. */}
           <div
             key={pathname}
             className="animate-in fade-in-0 duration-150 motion-reduce:animate-none"
           >
-            <Outlet />
+            <Suspense fallback={<RouteFallback />}>
+              <Outlet />
+            </Suspense>
           </div>
         </main>
 

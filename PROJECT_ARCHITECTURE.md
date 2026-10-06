@@ -50,14 +50,15 @@ BrowserRouter (main.jsx)
     ├── /auth                    GuestRoute → Auth (full-screen card, no shell)
     └── ProtectedLayout          Loading… | redirect to /auth if signed out
         ├── AppShell             h-dvh: sidebar (≥lg) + top bar + <main> + bottom nav (<lg)
-        │   ├── /dashboard       learning overview, stats, priority decks
-        │   ├── /decks           full deck grid
-        │   ├── /decks/:id       deck detail + card list
-        │   ├── /upload          two-panel AI generation workspace
-        │   ├── /analytics       charts + insights
-        │   └── /settings        API-key form
+        │   │                     Outlet wrapped in Suspense (Phase 11 lazy routes)
+        │   ├── /dashboard       learning overview, stats, priority decks (EAGER)
+        │   ├── /decks           full deck grid (lazy)
+        │   ├── /decks/:id       deck detail + card list (lazy)
+        │   ├── /upload          two-panel AI generation workspace (lazy)
+        │   ├── /analytics       charts + insights (lazy — keeps recharts off first paint)
+        │   └── /settings        API-key form (lazy)
         └── /review              FOCUS MODE — sibling of AppShell (ReviewShell:
-                                 own minimal header, no nav)
+                                 own minimal header, no nav; lazy + own Suspense)
     / → /dashboard · * → /
 ```
 
@@ -68,6 +69,10 @@ BrowserRouter (main.jsx)
 - Route transitions: `AppShell` wraps `<Outlet/>` in a `key={pathname}` fade
   (`animate-in fade-in-0 duration-150` + `motion-reduce:animate-none`); focus
   routes sit outside the shell and keep their own entrance animations.
+- **Code splitting (Phase 11):** all routes except AppShell/Auth/Dashboard are
+  `React.lazy`; the shell's `Suspense` boundary sits **inside** the keyed fade
+  div so the chrome never unmounts while a chunk loads (spinner =
+  `RouteFallback`, reduced-motion aware). `/review` has its own boundary.
 
 ## 4. Auth architecture
 
@@ -139,6 +144,12 @@ Upload.jsx
 - API keys: localStorage only (`gemini_api_key`, `groq_api_key`,
   `cerebras_api_key`) via helpers in `ai.js`; sent only to the matching provider.
 - Settings dialog/route (`SettingsForm`) writes those keys; no server storage.
+- **Usability fixes (Phase 10):** `/upload?deck=<id>` deep-link preselects the
+  target deck (DeckDetail's "Generate cards" action + empty-state link); Save
+  buttons require the deck to *resolve* (stale links can't FK-fail); after a
+  successful save `saving` stays armed through the 1-second redirect so a second
+  click can't duplicate cards; deck-load failure shows a friendly `role="alert"`
+  panel with Try again.
 
 ## 7. Analytics architecture
 
@@ -160,7 +171,10 @@ plus loading/error/no-history states.
   buttons), ≥3:1 vs surfaces in both themes (WCAG 1.4.11 — Final QA fix).
 - **Component layer:** shadcn/ui primitives under `src/components/ui/`
   (JSX, `cn` = tailwind-merge) — extend by adding utilities/classes, never by
-  hardcoding colors.
+  hardcoding colors. Irreversible confirms (delete deck/card) render
+  `AlertDialogAction` with the solid **`danger`** button variant so the
+  destructive action is visually distinct from primary actions (Phase 10, U-07);
+  trim-first validation guards every name/question/answer form (U-02/U-03).
 - **Theming:** pre-paint inline script in `index.html` sets `.dark` before React
   loads; `lib/theme.js` helpers + `ThemeToggle` persist/sync (`fastrev_theme`,
   cross-tab).
@@ -193,11 +207,17 @@ plus loading/error/no-history states.
 
 ## 10. Build & quality
 
-- Vite 8 build; Recharts makes the main chunk ~1.15 MB (known, acceptable).
+- Vite 8 build. **Phase 11 split the initial chunk: 1,150.61 kB → 657.37 kB
+  (gzip 335 → 192 kB)**; recharts now lives in the lazy `Analytics` chunk
+  (387 kB), route pages are 0.5–26 kB lazy chunks, pdf.js/mammoth stay lazy.
+- **Lighthouse (lab, mobile throttled, `vite preview`): 94 / 100 / 100 / 100**
+  (performance / a11y / best-practices / SEO); FCP 2.3 s · LCP 2.6 s · TBT 10 ms
+  · CLS 0. Baseline was 88 / 98 / 100 / 82 — full detail + method in
+  `PERFORMANCE_AUDIT.md` (scores are lab-only, never field data).
 - oxlint: 1 tolerated pre-existing warning (`ui/button.jsx` fast-refresh; the
   second disappeared with Final QA's deletion of the dead `ui/tabs.jsx`).
 - Every UI phase validates: lint → build → SSR smoke → contrast audit →
   dev-server routes → built-CSS utility check (temp scripts, deleted after).
-- Latest (Final QA): build ✓ · 49/49 SSR smoke · 84/84 contrast pairs (2
-  documented INFO: the `--border` hairline at 1.29/1.42) · 9 routes + 13 module
-  transforms HTTP 200. Interactive browser QA still pending — see AGENTS.md risks.
+- Latest (Phase 11): build ✓ · 27/27 perf smoke · 10 routes + 5 modules HTTP 200
+  · Lighthouse after-run 94/100/100/100 (stored JSON, temp dir). Interactive
+  browser QA still pending — see AGENTS.md risks.

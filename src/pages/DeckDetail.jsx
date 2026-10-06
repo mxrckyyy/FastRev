@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Pencil, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   AlertDialog,
@@ -147,20 +147,33 @@ export default function DeckDetail() {
   async function handleAdd(event) {
     event.preventDefault()
     setAddFormError(null)
+    // Native `required` accepts whitespace-only text — trim first so an
+    // empty card can never reach the review queue (U-03).
+    const question = addForm.question.trim()
+    const answer = addForm.answer.trim()
+    if (!question || !answer) {
+      setAddFormError('Question and answer are both required.')
+      document.getElementById('add-question')?.focus()
+      return
+    }
     setAdding(true)
     try {
       const { error } = await createCard(id, {
-        question: addForm.question.trim(),
-        answer: addForm.answer.trim(),
+        question,
+        answer,
         source: addForm.source.trim(),
       })
       if (error) {
         setAddFormError(error.message)
         return
       }
+      // Keep the dialog open for batch entry (U-05): clear the fields,
+      // refocus the question, and let the toast confirm the add.
       toast.success('Card added')
-      setAddOpen(false)
       setAddForm(emptyForm)
+      requestAnimationFrame(() =>
+        document.getElementById('add-question')?.focus(),
+      )
     } finally {
       setAdding(false)
     }
@@ -185,11 +198,19 @@ export default function DeckDetail() {
   async function handleSave(event) {
     event.preventDefault()
     setEditFormError(null)
+    // Trim-first validation (U-03): `required` passes whitespace-only text.
+    const question = editForm.question.trim()
+    const answer = editForm.answer.trim()
+    if (!question || !answer) {
+      setEditFormError('Question and answer are both required.')
+      document.getElementById(`edit-${editingId}-question`)?.focus()
+      return
+    }
     setSaving(true)
     try {
       const { error } = await updateCard(editingId, {
-        question: editForm.question.trim(),
-        answer: editForm.answer.trim(),
+        question,
+        answer,
         source: editForm.source.trim(),
       })
       if (error) {
@@ -228,7 +249,7 @@ export default function DeckDetail() {
               {error ? error : 'Deck not found.'}
             </p>
             <Button variant="outline" asChild>
-              <Link to="/dashboard">Back to dashboard</Link>
+              <Link to="/decks">Back to decks</Link>
             </Button>
           </div>
         ) : (
@@ -238,10 +259,18 @@ export default function DeckDetail() {
                 <h1 className="text-xl font-semibold">{deck.name}</h1>
                 <p className="text-sm text-muted-foreground">
                   {cards.length} {cards.length === 1 ? 'card' : 'cards'}
+                  {deck.due_count > 0 ? ` · ${deck.due_count} due` : ''}
                   {deck.description ? ` · ${deck.description}` : ''}
                 </p>
               </div>
-              <Dialog open={addOpen} onOpenChange={setAddOpen}>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" asChild>
+                  <Link to={`/upload?deck=${deck.id}`}>
+                    <Sparkles className="mr-2 size-4" aria-hidden="true" />
+                    Generate cards
+                  </Link>
+                </Button>
+                <Dialog open={addOpen} onOpenChange={setAddOpen}>
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="mr-2 size-4" aria-hidden="true" />
@@ -278,6 +307,7 @@ export default function DeckDetail() {
                   </form>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
 
             {error && (
@@ -288,7 +318,14 @@ export default function DeckDetail() {
 
             {cards.length === 0 && !error && (
               <p className="text-sm text-muted-foreground">
-                No cards yet — add your first card above.
+                No cards yet — add your first card above, or{' '}
+                <Link
+                  to={`/upload?deck=${deck.id}`}
+                  className="underline underline-offset-4 hover:text-foreground"
+                >
+                  generate cards with AI
+                </Link>
+                .
               </p>
             )}
 
@@ -370,6 +407,7 @@ export default function DeckDetail() {
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
+                                    variant="danger"
                                     onClick={() => handleDeleteCard(card)}
                                   >
                                     Delete card

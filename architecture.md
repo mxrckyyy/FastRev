@@ -32,6 +32,7 @@
 - `src/components/GeneratedCard.jsx` — generated-card preview row: selection checkbox, question/answer scan view, aria-labelled Edit/Remove buttons, parent-driven inline editor (Save/Cancel + validation).
 - `src/components/GenerationSkeleton.jsx` — generation loading state: `role="status"` line + decorative skeleton cards shaped like real preview rows; the status line's spinner is LoaderCircle (`animate-spin motion-reduce:animate-none`).
 - `src/components/LoadingButton.jsx` — shared async submit button (Phase 8): disabled + `aria-busy` + Button's `data-[loading]` dimming while loading, label swaps for a LoaderCircle spinner + `loadingLabel` ("Creating…", "Saving…", …). Used by every async submit outside Auth (which keeps its own identical inline pattern).
+- `src/components/RouteFallback.jsx` — Suspense fallback for lazy routes (Phase 11): LoaderCircle + `role="status"` sr-only label, `motion-reduce` aware; fills only the shell's content column (chrome stays mounted).
 - `src/components/ui/checkbox.jsx` — shadcn-style radix checkbox (added Phase 5); unchecked border uses `foreground/50` (≥3:1 vs card) instead of stock `border-input`.
 - `src/lib/supabase.js` — Supabase client singleton.
 - `src/lib/fsrs.js` — FSRS scheduling wrapper.
@@ -42,7 +43,7 @@
 - `src/index.css` — design system: Tailwind v4 `@theme` tokens + light/dark variables.
 - `src/components/ThemeToggle.jsx` — light/dark toggle button used in every page header.
 - `src/hooks/useAuth.js` — Auth context (user, signIn, signUp, signOut).
-- `src/hooks/useDecks.js` — CRUD for decks; also fetches per-deck `due_count` (deck rows with `cards(count)` + the deck_ids of currently-due cards, merged client-side).
+- `src/hooks/useDecks.js` — CRUD for decks; also fetches per-deck `due_count` (deck rows with `cards(count)` + the deck_ids of currently-due cards, merged client-side). Concurrent fetches from multiple consumers join ONE in-flight request (module-level, user-id keyed; results never cached — Phase 11).
 - `src/hooks/useCards.js` — CRUD for cards.
 - `src/hooks/useReviews.js` — Review queue, submission, FSRS update.
 - `src/hooks/useAnalytics.js` — Aggregations: retention, streak, due forecast, activity, weak decks.
@@ -57,7 +58,7 @@
 - `src/pages/Settings.jsx` — API key settings dialog (localStorage only).
 - `src/pages/Analytics.jsx` — learning-analytics page: stats row, Highlights chips, activity/forecast charts, rating breakdown, weak topics (Phase 6; see below).
 - `src/pages/Dashboard.jsx` — learning overview: greeting, Start Review hero, 4 stat cards, priority decks (Phase 3; see below).
-- `src/App.jsx` — Router + layout.
+- `src/App.jsx` — Router + layout; route-level `React.lazy` for every page except Auth/Dashboard (Phase 11), with Suspense boundaries at the shell outlet and on `/review`.
 - `src/main.jsx` — app entry: ErrorBoundary → BrowserRouter → AuthProvider → App + the global sonner `<Toaster>` (Phase 8, see Interaction & Feedback).
 
 ## Styling & Design System
@@ -330,6 +331,50 @@ App-wide audit-and-fix pass over everything shipped in UI/UX Phases 1–8: desig
 
 ### Verification (Final QA)
 `npm run lint` → **1 warning only** (pre-existing `button.jsx` fast-refresh) → `npm run build` ✓ (main 1,148.26 kB / CSS 63.23 kB, known 500 kB chunk warning) → **49/49 SSR smoke** (every page loading/empty/error state, AuthView ×7, LoadingButton, Toaster, chart aria-labels, `<ul>`/roles, `ui/tabs.jsx` confirmed gone) → **84-pair contrast audit: 0 failures / 2 documented INFO** (`--border` 1.29:1 light / 1.42:1 dark) in light AND dark → 9 routes + 13 module transforms HTTP 200 on the dev server → built CSS contains every new utility (`size-3.5`, `md:text-sm`, `bg-destructive/5`, …) → temp scripts deleted. **Not interactively browser-tested** (no browser tool) — see AGENTS.md Known Risks for the manual pass list.
+
+## Usability Audit (Phase 10)
+A read-only inspection of the real code (no assumption from phase docs) covering user **Flows A–F** (sign up/login, dashboard, deck create/delete, card create/edit, AI generation + save, review incl. empty queue/failures), Nielsen's 10 heuristics, and a cross-cutting pass over labels, navigation, validation and failure recovery. Output: **`USABILITY_AUDIT.md`** — 18 issues (0 Critical · 1 High · 7 Medium · 6 Low · 4 Info; **12 Fixed**, 6 Not Fixed — U-08 deferred, U-14…U-18 documented), each with severity, page, problem, user impact, recommendation, and a final Fixed / Partially Fixed / Not Fixed status.
+
+### What changed (targeted fixes only — no redesign)
+- **U-01 (High) Upload double-save** — `handleSave` now guards `if (!deck || saving) return`; `saving` stays `true` on success (held through the 1-second redirect) and is only cleared on failure, so a second click can never duplicate cards; Save buttons are `disabled={!deck || …}` (a stale/unresolvable `?deck=` id can no longer FK-fail silently).
+- **U-04 Deck→Upload deep link** — DeckDetail header "Generate cards" + empty-state AI link now navigate to `/upload?deck=<id>`; `Upload.jsx` reads `useSearchParams`, preselects that deck on mount (`useState(() => …)` initializer — no effect), and shows a "you have no decks yet" link → `/decks`. Empty DeckDetail CTA points at `/decks`.
+- **U-06 decks-load failure** — Upload renders a friendly `role="alert"` panel ("Couldn't load your decks…") with a **Try again** button → `fetchDecks()`, instead of a silently empty dropdown.
+- **U-02/U-03 form validation** — `CreateDeckDialog` and DeckDetail's Add-Card dialog trim-guard blank submissions (`Enter a name for your deck.` / `Question and answer are both required.`), keep the dialog open, and refocus the first invalid field.
+- **U-05 batch card entry** — Add Card no longer closes on success; it clears the fields and refocuses the question textarea so several cards can be typed in one sitting.
+- **U-10/U-11 navigation clarity** — DeckDetail back link "Back to decks" → `/decks` (was `/dashboard`); header shows a real deck name + `· N due`.
+- **U-07 destructive affordance** — delete deck / delete card `AlertDialogAction` now uses the solid **`danger`** button variant (was indistinguishable primary blue); text copy still carries the warning (no color-only signaling).
+- **U-09 label** — DeckList "New Deck" → **"Create Deck"** (consistent with Dashboard/dialog verbs).
+- **U-12 Review empty-queue action** — the "All caught up!" screen gained an outline **Generate cards** → `/upload`, so the zero-work state is actionable.
+- **U-13 welcome heading** — Dashboard greeting gets `break-words` so long names/emails wrap instead of overflowing 375 px.
+
+### Deliberately not fixed (documented in the audit)
+- **U-08 Deck rename has no UI** — `updateDeck` exists but no surface calls it; adding it properly needs a shared decks context (every `useDecks` consumer would otherwise show stale names). Needs its own small phase.
+- **U-14…U-18** — README still says the old "New Deck" wording claim / no offline queue / no password reset / 1000-row analytics cap / localStorage key exposure are all accepted free-tier scope decisions carried forward as Known Risks.
+
+### Verification (Phase 10)
+`npm run lint` → **1 warning only** (pre-existing `button.jsx` fast-refresh) → `npm run build` ✓ (main ≈1,150.6 kB / CSS ≈63.44 kB, known 500 kB chunk warning) → **49/49 SSR smoke** (Upload preselect probe via `useSearchParams` + source assertions, save-guard source assertions, CreateDeckDialog/DeckDetail validation strings, empty-queue Generate button, danger-variant confirms, all regression states) → **102-contrast-check audit: 0 failures / 6 documented INFO** (the `--border` hairline in both themes; tint fills/skeletons excluded as non-boundaries) — includes the new solid `danger` dialog-footer pair → 9 routes + 8 module transforms HTTP 200 → built CSS contains every touched utility (`break-words`, `underline-offset-4`, `bg-danger`, `bg-destructive/10`, …) → temp scripts deleted. **Not interactively browser-tested** (no browser tool) — manual pass list in AGENTS.md Known Risks.
+
+## Performance (Phase 11)
+Evidence-based optimization pass; full detail + lab data in `PERFORMANCE_AUDIT.md` (baseline was written before any code changed).
+
+### What changed
+- **Route-level code splitting** — `App.jsx` lazy-imports Analytics, Upload, SettingsPage, Decks, DeckDetail and Review; **Auth, Dashboard and AppShell stay eager** (they are the first-paint path for both landing states: guest → `/auth`, signed-in → `/dashboard`). A new page must be lazy unless it is on that critical path.
+- **Suspense placement** — the shell's boundary sits *inside* AppShell's keyed fade div (`<Outlet/>` wrapped), so a chunk load never unmounts the chrome (no CLS, no nav flash); focus-mode `/review` carries its own boundary with the full-page loading message. Fallback = `RouteFallback` (the one spinner + sr-only status, reduced-motion aware).
+- **`useDecks` request dedupe** — module-level in-flight promise keyed by user id: AppShell + the mounted page used to fire the same two Supabase queries twice per load; concurrent callers now join one request. Only the *promise* is shared — results are never cached, so create/delete/refetch behavior is unchanged and a logout/login cannot join another user's request.
+- **Head/landmarks** — `index.html` meta description, `public/robots.txt` (SEO 82 → 100); `AuthView` (both variants) + `FullPageMessage` render `<main>` (a11y 98 → 100). Shell routes still own AppShell's single `<main>` — the alternatives never coexist.
+
+### Measured (Lighthouse, lab, mobile emulated + throttled, `vite preview`)
+| | Baseline | After |
+| --- | --- | --- |
+| Performance / A11y / BP / SEO | 88 / 98 / 100 / 82 | **94 / 100 / 100 / 100** |
+| FCP · LCP | 2.9 s · 3.2 s | **2.3 s · 2.6 s** |
+| TBT · CLS | 40 ms · 0 | **10 ms · 0** |
+| Initial JS chunk (gzip) | 1,150.61 kB (334.95) | **657.37 kB (192.25)** |
+
+recharts now rides the lazy `Analytics` chunk (387 kB); route pages are 0.5–26 kB chunks; pdf.js/mammoth were already lazy.
+
+### Declined (documented, not silent)
+Chart animations (≤14-point datasets — no measurable win), font preload (subsets + swap already right; CLS 0), merging `submitReview`'s read→update→insert round trips (order is load-bearing; needs an RPC = schema change), a lighter analytics query (streak/retention need every row), production source maps. Lab-only numbers — no field data; logged-in lazy navigation still needs one manual browser pass.
 
 ## Database Schema (Supabase)
 - `decks` (id, user_id, name, description, created_at)

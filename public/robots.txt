@@ -1,0 +1,4 @@
+# FastRev is a private, sign-in-gated SPA: crawlers only ever receive this
+# static shell — no user content is server-rendered.
+User-agent: *
+Allow: /

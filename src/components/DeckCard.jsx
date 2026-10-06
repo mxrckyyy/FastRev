@@ -122,9 +122,12 @@ export default function DeckCard({ deck, onDelete }) {
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDelete}>
-                      Delete deck
-                    </AlertDialogAction>
+                                            <AlertDialogAction
+                                              variant="danger"
+                                              onClick={handleDelete}
+                                            >
+                                              Delete deck
+                                            </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>

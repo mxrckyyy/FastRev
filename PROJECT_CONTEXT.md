@@ -19,7 +19,7 @@ FastRev — a free-tier spaced-repetition flashcard web app for students.
 
 ## Current phase
 
-**Phase 9 — not yet defined.**
+**Phase 12 — not yet defined.**
 Phases 0–6 are complete: project setup, Supabase schema/auth, deck CRUD, review +
 FSRS, AI generation, analytics + docs, schema repair, material import, and UI/UX
 plan Phases 1–8 (design system, app shell, dashboard/decks, review focus mode,
@@ -27,7 +27,19 @@ upload, analytics, authentication, interaction/motion/feedback). **App-wide Fina
 QA & Polish (audit & fix pass) completed 2026-10-06** — control-boundary contrast
 (`--input`), type-scale fixes, dead `tabs.jsx` removed, ARIA/landmark gap-fills,
 icon-size + error-tint consistency, chart text alternatives; no functionality
-changed. See `AGENTS.md` → Completed Phases + `architecture.md` → § Final QA & Polish.
+changed. **UI/UX Phase 10 — Usability Audit & targeted fixes completed
+2026-10-06**: `USABILITY_AUDIT.md` (Flows A–F, 18 issues) + fixes — double-save
+guard on Upload, whitespace validation on deck/card forms, `/upload?deck=` deep
+link from DeckDetail, Add Card dialog stays open for batch entry, delete confirms
+now solid `danger`, decks-error retry, label/due-count/copy polish. Deck **rename
+still has no UI** (documented as U-08, needs a shared decks context).
+**Phase 11 — Performance Audit & Optimization completed 2026-10-06**:
+`PERFORMANCE_AUDIT.md` — real Lighthouse lab runs (mobile, throttled) went
+**88/98/100/82 → 94/100/100/100** (perf/a11y/BP/SEO); initial JS chunk
+**1,150.61 kB → 657.37 kB** (gzip 335 → 192 kB) via React.lazy route splitting
+(recharts now rides the Analytics chunk), `useDecks` in-flight request dedupe,
+meta description + `public/robots.txt`, `<main>` landmarks on the auth/loading
+screens. See `AGENTS.md` → Completed Phases + `architecture.md` → § Performance (Phase 11).
 
 ## Tech stack (locked)
 
@@ -52,6 +64,8 @@ FastRev/
 ├── architecture.md              # full architecture reference
 ├── PROJECT_CONTEXT.md           # this file — current-state on-ramp
 ├── PROJECT_ARCHITECTURE.md      # current-state architecture summary
+├── USABILITY_AUDIT.md           # Phase 10 audit: Flows A–F, 18 issues + statuses
+├── PERFORMANCE_AUDIT.md         # Phase 11 perf audit: baseline → Lighthouse 94/100/100/100
 ├── README.md                    # setup: Supabase, AI keys, cron, Vercel deploy
 ├── index.html                   # entry; inline pre-paint dark-mode bootstrap
 ├── vite.config.js               # react + tailwindcss plugins, @ alias (JS, not .ts)
@@ -73,6 +87,7 @@ FastRev/
     │   ├── Breadcrumbs.jsx, StatCard.jsx, DeckCard.jsx, CreateDeckDialog.jsx
     │   ├── EmptyState.jsx, ErrorState.jsx, ErrorBoundary.jsx, ThemeToggle.jsx
     │   ├── LoadingButton.jsx     # shared async submit (spinner + aria-busy)
+│   │   RouteFallback.jsx     # Suspense fallback for lazy routes (Phase 11)
     │   ├── ReviewShell.jsx, ReviewProgress.jsx, Flashcard.jsx,
     │   │   RatingButtons.jsx, ShortcutHint.jsx          # review focus mode
     │   ├── GeneratedCard.jsx, GenerationSkeleton.jsx    # upload preview
@@ -191,8 +206,10 @@ lint → build → SSR render smoke via temp `ssr-smoke.mjs` (Vite `ssrLoadModul
 `renderToString` + check assertions) → contrast audit via temp `contrast-audit.mjs`
 (oklch → WCAG ratio; ≥4.5 text / ≥3 UI, light + dark) → dev-server route/module
 HTTP 200s → built-CSS contains new utilities → delete temp scripts.
-Latest run (Final QA): lint 1 warning · build ✓ · 49/49 smoke · 84/84 contrast
-(+2 documented INFO) · 9 routes + 13 modules HTTP 200.
+Latest run (Phase 11 — performance): lint 1 warning · build ✓ · **27/27 perf
+smoke** (landmarks, lazy/eager split, RouteFallback, dedupe wiring, head tags) ·
+**10 routes + 5 modules HTTP 200** · Lighthouse (lab, mobile throttled)
+**94 / 100 / 100 / 100** with FCP 2.3 s, LCP 2.6 s, TBT 10 ms, CLS 0.
 
 ## Conventions worth knowing
 
@@ -211,3 +228,13 @@ Latest run (Final QA): lint 1 warning · build ✓ · 49/49 smoke · 84/84 contr
 - Docs convention: `AGENTS.md` + `architecture.md` are the canonical long-form
   docs (updated every phase); this file + `PROJECT_ARCHITECTURE.md` are the
   current-state summaries.
+- Performance conventions (Phase 11): routes are code-split with `React.lazy`
+  (`App.jsx`) — **only AppShell/Auth/Dashboard stay eager**; a new heavy page
+  must be lazy too. Suspense for shell routes lives **inside AppShell's outlet**
+  (chrome never unmounts — no CLS); focus-mode routes carry their own boundary.
+  `RouteFallback` is the one fallback (spinner + sr-only status). Duplicate
+  concurrent fetches are collapsed by module-level in-flight promises keyed by
+  user id (`useDecks` pattern) — results are never cached, only deduped.
+  Lighthouse is run against `vite preview` with a temp-dir install (never add
+  lighthouse to package.json); baseline and after numbers live in
+  `PERFORMANCE_AUDIT.md` — never restate scores from memory.

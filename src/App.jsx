@@ -1,20 +1,27 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import AppShell from '@/components/AppShell'
 import { useAuth } from '@/hooks/useAuth'
-import Analytics from '@/pages/Analytics'
 import Auth from '@/pages/Auth'
 import Dashboard from '@/pages/Dashboard'
-import DeckDetail from '@/pages/DeckDetail'
-import Decks from '@/pages/Decks'
-import Review from '@/pages/Review'
-import SettingsPage from '@/pages/SettingsPage'
-import Upload from '@/pages/Upload'
+
+// Route-level code splitting (Phase 11 perf): only the first-paint-critical
+// modules (shell, Auth, Dashboard) stay in the main chunk. Everything else —
+// above all Analytics, which drags recharts in — loads on navigation. The
+// Suspense boundary for shell routes lives inside AppShell so the chrome
+// never unmounts while a chunk arrives (no layout shift).
+const Analytics = lazy(() => import('@/pages/Analytics'))
+const DeckDetail = lazy(() => import('@/pages/DeckDetail'))
+const Decks = lazy(() => import('@/pages/Decks'))
+const Review = lazy(() => import('@/pages/Review'))
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
+const Upload = lazy(() => import('@/pages/Upload'))
 
 function FullPageMessage({ children }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <main className="flex min-h-screen items-center justify-center bg-background">
       <p role="status" className="text-sm text-muted-foreground">{children}</p>
-    </div>
+    </main>
   )
 }
 
@@ -55,8 +62,16 @@ export default function App() {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
-        {/* Review focus mode: bare layout, own minimal header only. */}
-        <Route path="/review" element={<Review />} />
+        {/* Review focus mode: bare layout, own minimal header only. Its
+            boundary is per-route because it sits outside AppShell. */}
+        <Route
+          path="/review"
+          element={
+            <Suspense fallback={<FullPageMessage>Loading…</FullPageMessage>}>
+              <Review />
+            </Suspense>
+          }
+        />
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />

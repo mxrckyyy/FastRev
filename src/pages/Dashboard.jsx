@@ -297,7 +297,7 @@ export default function Dashboard() {
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:space-y-8 sm:px-6">
       <header>
-        <h2 className="text-xl font-semibold">
+        <h2 className="break-words text-xl font-semibold">
           Welcome{user?.email ? `, ${user.email}` : ''}
         </h2>
         <p className="text-sm text-muted-foreground">

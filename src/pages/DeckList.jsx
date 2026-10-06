@@ -70,7 +70,7 @@ export default function DeckList() {
           trigger={
             <Button>
               <Plus className="mr-2 size-4" aria-hidden="true" />
-              New Deck
+              Create Deck
             </Button>
           }
         />

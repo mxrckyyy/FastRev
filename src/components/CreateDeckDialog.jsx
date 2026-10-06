@@ -33,6 +33,13 @@ export default function CreateDeckDialog({ createDeck, trigger }) {
   async function handleCreate(event) {
     event.preventDefault()
     setFormError(null)
+    // Native `required` accepts whitespace-only text; trim first so an
+    // empty deck can never be created (U-02, error prevention).
+    if (!name.trim()) {
+      setFormError('Enter a name for your deck.')
+      document.getElementById('deck-name')?.focus()
+      return
+    }
     setSubmitting(true)
     try {
       const { error } = await createDeck(name.trim(), description.trim())

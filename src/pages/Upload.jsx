@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   FileUp,
   KeyRound,
@@ -83,10 +83,14 @@ const selectClasses =
 
 export default function Upload() {
   const navigate = useNavigate()
-  const { decks, loading: decksLoading, error: decksError } = useDecks()
+  const [searchParams] = useSearchParams()
+  const { decks, loading: decksLoading, error: decksError, fetchDecks } =
+    useDecks()
   const { createCard } = useCards()
 
-  const [deckId, setDeckId] = useState('')
+  // Deep link from a deck page (`/upload?deck=<id>`): preselect that deck
+  // so the user never has to re-find it (U-04).
+  const [deckId, setDeckId] = useState(() => searchParams.get('deck') || '')
   const [notes, setNotes] = useState('')
   const [apiKeys, setApiKeys] = useState(() => loadApiKeys())
 
@@ -251,7 +255,10 @@ export default function Upload() {
   }
 
   async function handleSave(mode) {
-    if (!deckId || saving) return
+    // Require a *resolved* deck (not just a raw id): a stale `?deck=` link
+    // can't produce a foreign-key failure, and the guard doubles as the
+    // re-entry lock while `saving` stays armed on the success path (U-01).
+    if (!deck || saving) return
     const targets = rows.filter(
       (row) => isValidRow(row) && (mode === 'all' || row.selected),
     )
@@ -275,9 +282,8 @@ export default function Upload() {
       savedIds.add(row.id)
     }
 
-    setSaving(false)
-
     if (failure) {
+      setSaving(false)
       // Saved rows leave the list; unsaved rows and their selection stay so
       // the user can retry without regenerating anything.
       setRows((prev) => prev.filter((row) => !savedIds.has(row.id)))
@@ -290,11 +296,14 @@ export default function Upload() {
       return
     }
 
-    const deck = decks.find((candidate) => candidate.id === deckId)
+    // Success: `saving` deliberately stays true through the 1-second redirect
+    // so a second click during the delay can't insert the same cards twice
+    // (U-01). The buttons keep spinning "Saving…" until the route unmounts.
+    const deckName = deck.name
     // The global toast survives the redirect below (the old in-page toast
     // disappeared the moment the route changed).
     toast.success(
-      `${savedIds.size} ${savedIds.size === 1 ? 'card' : 'cards'} saved to ${deck?.name || 'deck'}`,
+      `${savedIds.size} ${savedIds.size === 1 ? 'card' : 'cards'} saved to ${deckName}`,
     )
     setTimeout(() => navigate(`/decks/${deckId}`), 1000)
   }
@@ -358,7 +367,7 @@ export default function Upload() {
                   {!decksLoading && decks.length === 0 && (
                     <p className="text-xs text-muted-foreground">
                       No decks yet —{' '}
-                      <Link to="/dashboard" className="underline">
+                      <Link to="/decks" className="underline">
                         create one first
                       </Link>
                       .
@@ -516,7 +525,22 @@ export default function Upload() {
                 </div>
 
                 {decksError && (
-                  <p className="text-sm text-destructive">{decksError}</p>
+                  <div
+                    role="alert"
+                    className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5"
+                  >
+                    <p className="min-w-40 flex-1 text-sm text-destructive">
+                      Couldn’t load your decks. Check your connection and try
+                      again.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchDecks()}
+                    >
+                      Try again
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -694,7 +718,7 @@ export default function Upload() {
                         <LoadingButton
                           type="button"
                           variant="outline"
-                          disabled={!deckId || selectedValidCount === 0}
+                          disabled={!deck || selectedValidCount === 0}
                           loading={saving}
                           loadingLabel="Saving…"
                           onClick={() => handleSave('selected')}
@@ -703,7 +727,7 @@ export default function Upload() {
                         </LoadingButton>
                         <LoadingButton
                           type="button"
-                          disabled={!deckId || validCount === 0}
+                          disabled={!deck || validCount === 0}
                           loading={saving}
                           loadingLabel="Saving…"
                           onClick={() => handleSave('all')}

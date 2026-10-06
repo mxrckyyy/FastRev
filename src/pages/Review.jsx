@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CircleCheck } from 'lucide-react'
+import { CircleCheck, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import ReviewShell from '@/components/ReviewShell'
@@ -192,9 +192,17 @@ export default function Review() {
             title="You’re all caught up"
             description="No cards are due right now. Come back later, or add more cards to your decks."
           >
-            <Button asChild>
-              <Link to="/dashboard">Back to dashboard</Link>
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+              <Button asChild>
+                <Link to="/dashboard">Back to dashboard</Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link to="/upload">
+                  <Sparkles aria-hidden="true" />
+                  Generate cards
+                </Link>
+              </Button>
+            </div>
           </EmptyState>
         </div>
       )}

@@ -7,6 +7,12 @@ function withCardCount(deck) {
   return { ...rest, card_count: cards?.[0]?.count ?? 0 }
 }
 
+// One in-flight decks request shared by every useDecks() consumer that
+// mounts while it is pending (see fetchDecks below). Keyed by user id so a
+// logout/login in the same session can never join the previous user's
+// request; released when the promise settles.
+let inflightDecks = null
+
 // Group the user's due cards by deck so every deck row gets a `due_count`
 // (used by the dashboard's Due Today stat and the deck-card due badges).
 function countDueByDeck(cards) {
@@ -27,40 +33,71 @@ export function useDecks() {
   // callbacks — keeps effects free of synchronous cascading renders.
   // Two queries run together: deck rows (with total card counts) and the
   // deck_ids of currently-due cards, merged into `due_count` per deck.
+  //
+  // Performance (Phase 11): AppShell and the mounted page both call
+  // useDecks() on every full page load, which used to fire the same two
+  // queries twice in parallel. Concurrent callers now JOIN one in-flight
+  // request instead of starting a duplicate. Results are deliberately NOT
+  // cached: each caller still gets its own state, later mounts still
+  // refetch, and mutations behave exactly as before — only the duplicate
+  // network race is gone.
   const fetchDecks = useCallback(() => {
-    const now = new Date().toISOString()
-    const deckQuery = user
-      ? supabase
+    // Join the shared request only when it belongs to this user; otherwise
+    // start one (or resolve the signed-out empty list). Every setState
+    // stays inside .then() callbacks so effects never render synchronously.
+    let request = user && inflightDecks?.userId === user.id ? inflightDecks.promise : null
+    if (!request) {
+      if (!user) {
+        request = Promise.resolve({ error: null, list: [] })
+      } else {
+        const now = new Date().toISOString()
+        const deckQuery = supabase
           .from('decks')
           .select('*, cards(count)')
           .order('created_at', { ascending: false })
-      : Promise.resolve({ data: [], error: null })
-    const dueQuery = user
-      ? supabase
+        const dueQuery = supabase
           .from('cards')
           .select('deck_id')
           .eq('user_id', user.id)
           .lte('due', now)
-      : Promise.resolve({ data: [], error: null })
-    return Promise.all([deckQuery, dueQuery]).then(
-      ([deckResult, dueResult]) => {
-        const failure = deckResult.error || dueResult.error
-        if (failure) {
-          setError(failure.message)
-          setLoading(false)
-          return null
+        // The shared promise resolves to { error, list } and never rejects,
+        // so every joiner can handle both outcomes in one .then().
+        request = Promise.all([deckQuery, dueQuery]).then(
+          ([deckResult, dueResult]) => {
+            const failure = deckResult.error || dueResult.error
+            if (failure) return { error: failure, list: null }
+            const dueByDeck = countDueByDeck(dueResult.data || [])
+            const list = (deckResult.data || []).map((deck) => ({
+              ...withCardCount(deck),
+              due_count: dueByDeck.get(deck.id) || 0,
+            }))
+            return { error: null, list }
+          },
+          (rejection) => ({
+            error: { message: rejection?.message || String(rejection) },
+            list: null,
+          }),
+        )
+        const entry = { userId: user.id, promise: request }
+        inflightDecks = entry
+        // Drop the entry as soon as it settles so the NEXT mount refetches.
+        const release = () => {
+          if (inflightDecks === entry) inflightDecks = null
         }
-        setError(null)
-        const dueByDeck = countDueByDeck(dueResult.data || [])
-        const list = (deckResult.data || []).map((deck) => ({
-          ...withCardCount(deck),
-          due_count: dueByDeck.get(deck.id) || 0,
-        }))
-        setDecks(list)
+        request.then(release, release)
+      }
+    }
+    return request.then(({ error: failure, list }) => {
+      if (failure) {
+        setError(failure.message)
         setLoading(false)
-        return list
-      },
-    )
+        return null
+      }
+      setError(null)
+      setDecks(list)
+      setLoading(false)
+      return list
+    })
   }, [user])
 
   useEffect(() => {

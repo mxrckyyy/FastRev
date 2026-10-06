@@ -63,7 +63,7 @@ export function AuthView({
 
   if (confirmationEmail) {
     return (
-      <div className="relative flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-12">
+      <main className="relative flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-12">
         <div className="absolute top-3 right-3">
           <ThemeToggle />
         </div>
@@ -111,12 +111,12 @@ export function AuthView({
             </div>
           </CardContent>
         </Card>
-      </div>
+      </main>
     )
   }
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-12">
+    <main className="relative flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-12">
       <div className="absolute top-3 right-3">
         <ThemeToggle />
       </div>
@@ -258,7 +258,7 @@ export function AuthView({
           </p>
         </CardContent>
       </Card>
-    </div>
+    </main>
   )
 }
 
