@@ -466,9 +466,9 @@ export default function Upload() {
                       <LoadingButton
                         type="button"
                         variant="outline"
-                        size="sm"
+                        size="lg"
                         loading={importing}
-                        loadingLabel="Importing…"
+                        loadingLabel="Importing."
                         onClick={() => fileInputRef.current?.click()}
                       >
                         Browse files

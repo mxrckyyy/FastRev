@@ -12,7 +12,7 @@
 - `src/components/Sidebar.jsx` — desktop sidebar (≥1024px): brand, primary nav, account footer.
 - `src/components/TopBar.jsx` — reusable page bar: hamburger (mobile), title or breadcrumb, theme toggle, account menu.
 - `src/components/MobileNav.jsx` — bottom nav below `lg` (Dashboard/Decks/Review/Upload), in normal flow.
-- `src/components/MobileMenu.jsx` — hamburger dialog: full nav list + sign-out (reuses shadcn Dialog).
+- `src/components/MobileMenu.jsx` — hamburger dialog: full nav list + sign-out (reuses shadcn Dialog); close returns focus to the hamburger button via `returnFocusRef` + `onCloseAutoFocus` preventDefault (Phase 13).
 - `src/components/UserMenu.jsx` — account dropdown (top-bar icon + sidebar row variants): Settings, Sign out.
 - `src/components/Breadcrumbs.jsx` — reusable trail; last item is the current page (not a link).
 - `src/lib/nav.js` — NAV_ITEMS / MOBILE_NAV_ITEMS, `getPageMeta(pathname, decks)`, shared NavLink class builders.
@@ -53,7 +53,7 @@
 - `src/pages/Decks.jsx` — `/decks` route: content width + shared `DeckList`.
 - `src/pages/SettingsPage.jsx` — `/settings` route: wraps the existing `SettingsForm`.
 - `src/pages/DeckList.jsx` — deck grid (1/2/3 columns) + create deck, with loading skeletons / error retry / empty state.
-- `src/pages/DeckDetail.jsx` — cards inside a deck: loading renders the Phase 8 `DeckDetailSkeleton` (header + card-row shapes, `aria-busy`, sr-only "Loading deck…"), CRUD success/failure reported via toasts.
+- `src/pages/DeckDetail.jsx` — cards inside a deck: loading renders the Phase 8 `DeckDetailSkeleton` (header + card-row shapes, `aria-busy`, sr-only "Loading deck…"), CRUD success/failure reported via toasts; long-name/long-token text is contained (`min-w-0`/`break-words`) and inline edit moves focus to the question field / returns it to the row's Edit button (Phase 13).
 - `src/pages/Review.jsx` — focus-mode review session: queue/submit via `useReviews`, keyboard shortcuts, focus management, progress, rating flow, loading/error/empty/completion states (Phase 4; see below).
 - `src/pages/Upload.jsx` — two-panel card-generation workspace: material input + Generate → skeleton/preview with select/edit/remove → Save All / Save Selected (Phase 5; see below). Async submits use `LoadingButton`; the save-confirmation toast is the global sonner toast (Phase 8).
 - `src/pages/Settings.jsx` — API key settings dialog (localStorage only).
@@ -445,6 +445,65 @@ secret scan of `dist/` clean · git history scan clean · local server + headles
 headers on the wire for `/` and `/auth`, full Auth screen rendered under CSP with zero
 violations, inline-script probe blocked, missing-config screen shown · `npm audit` run.
 **Not verified:** live Supabase RLS/triggers, headers on the real URL, authenticated flows.
+
+## Cross-Browser & Device QA (Phase 13)
+
+**Deliverable:** `CROSS_BROWSER_QA.md` — testing scope & method, honest
+environment table (Chromium executed; Firefox/WebKit/physical devices explicitly
+Not Tested), responsive matrix (12 widths incl. 639/640, 767/768, 1023/1024
+edges), static browser-compat feature table, a11y/touch/keyboard sections,
+Issues **CB-01…CB-07** with evidence, Fixes Applied, Remaining Issues, Final
+QA Status.
+
+**Method:** evidence-first — the production `dist/` served with the exact
+`vercel.json` header set; a scripted headless-Chrome CDP harness (lives in
+`%TEMP%\opencode\phase13\`, never committed) ran 10 scenarios with layout-overflow
+scans, touch-target measurement, real keyboard/mouse input, dark +
+reduced-motion emulation and console/exception capture. Supabase +
+Gemini/Groq/Cerebras were intercepted at the network layer with deterministic
+fixtures (240-char unbroken token, 100-char deck name, 5-card deck) — results
+are reproducible and no live-backend claim is made.
+
+**App changes (all evidence-backed, inside the phase boundary):**
+
+- **CB-01/02 long-text containment (DeckDetail):** card row `min-w-0` +
+  `break-words` title + `shrink-0` actions (a 240-char unbroken question used
+  to stretch the page to `right:3059px` at 375 AND 1440); header
+  h1/subtitle/description/source get `min-w-0`/`break-words` for 100-char
+  names/URLs.
+- **CB-03 inline-edit focus (DeckDetail):** Edit → `requestAnimationFrame`
+  focus to the row's question textarea; Cancel/save → index-based refocus of
+  that row's Edit button (Phase 5 documented this but it was never implemented).
+- **CB-04 MobileMenu focus return:** close previously dropped focus to `<body>`;
+  now a `returnFocusRef` prop (wired through TopBar/AppShell) plus
+  `onCloseAutoFocus` `preventDefault()` restores the hamburger button.
+- **CB-05/06 touch floor:** dialog close 28 → 32 px (`size="icon"`) and Upload
+  "Browse files" 28 → 36 px (`size="lg"`, same as Generate) — both were under
+  the project's own 30 px `measure()` floor (WCAG 2.5.8 AA 24 px passed even
+  before).
+
+**Deliberately not changed:** **CB-07** `Review.handleRating` has no
+`try/finally` (an unexpected throw would stick `submittingRef`) — unreachable
+in production because FSRS state is always 0–3, and review logic is out of this
+phase's boundary; touch targets stay compact system-wide (28–36 px standard,
+rating buttons 48/44) — 44 px AAA not adopted; no other layout/design changes.
+
+**Harness-vs-app honesty:** several early failures were root-caused to the
+harness/fixtures, not the app (ts-fsrs `state:4` undefined, missing provider
+CORS preflight, recharts 0-width parent read, PostgREST mock returning arrays
+for `.single()`, a Node-context `innerWidth`, selector gaps, missing deck
+preselect in the save flow) — each fixed in the harness and recorded as such in
+`CROSS_BROWSER_QA.md` + AGENTS.md Key Decisions.
+
+### Verification (Phase 13)
+
+`npm run lint` (1 tolerated warning) · dummy-env `npm run build` ✓ · harness
+**179/179 checks passed, 0 failed, 0 console errors** (10 scenarios × 12
+widths, 36 screenshots) · final `npm run build` **without** env vars (0
+`qa-dummy` strings in `dist/`, Phase 12 fail-safe guard expected as designed).
+**Not covered:** Firefox/WebKit/physical devices, live Supabase sessions, real
+AI-provider endpoints (Groq/Cerebras CORS), real screen readers — see
+`CROSS_BROWSER_QA.md` § Remaining Issues.
 
 ## Database Schema (Supabase)
 - `decks` (id, user_id, name, description, created_at)

@@ -17,12 +17,20 @@ import { NAV_ITEMS, sidebarLinkClass } from '@/lib/nav'
  * Reuses the shadcn Dialog, so Radix provides the focus trap, Escape-to-
  * close and labelled dialog semantics.
  */
-export default function MobileMenu({ open, onOpenChange }) {
+export default function MobileMenu({ open, onOpenChange, returnFocusRef }) {
   const { user, signOut } = useAuth()
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent
+        onCloseAutoFocus={(event) => {
+          // The menu has no DialogTrigger, so Radix would drop focus on
+          // <body> after Escape/outside-click — hand it back to the
+          // hamburger that opened the menu instead.
+          event.preventDefault()
+          returnFocusRef?.current?.focus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Menu</DialogTitle>
           <DialogDescription className="sr-only">

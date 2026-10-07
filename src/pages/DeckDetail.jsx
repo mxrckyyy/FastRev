@@ -193,12 +193,28 @@ export default function DeckDetail() {
       source: card.source || '',
     })
     setEditFormError(null)
+    // Move focus into the freshly mounted edit form (the row remounts with
+    // key id::edit, so the textarea doesn't exist until after this commit).
+    requestAnimationFrame(() =>
+      document.getElementById(`edit-${card.id}-question`)?.focus(),
+    )
   }
 
   function cancelEditing() {
+    const index = cards.findIndex((card) => card.id === editingId)
     setEditingId(null)
     setEditForm(emptyForm)
     setEditFormError(null)
+    // Return focus to this card's Edit button (same position in the list)
+    // now that the form row is gone (applies to Cancel and to save success,
+    // which both route through here).
+    requestAnimationFrame(() => {
+      const editButtons = document.querySelectorAll(
+        '[aria-label="Edit card"]',
+      )
+      const target = editButtons[index >= 0 ? index : 0]
+      if (target && document.activeElement !== target) target.focus()
+    })
   }
 
   async function handleSave(event) {
@@ -261,9 +277,11 @@ export default function DeckDetail() {
         ) : (
           <>
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h1 className="text-xl font-semibold">{deck.name}</h1>
-                <p className="text-sm text-muted-foreground">
+              <div className="min-w-0">
+                <h1 className="break-words text-xl font-semibold">
+                  {deck.name}
+                </h1>
+                <p className="break-words text-sm text-muted-foreground">
                   {cards.length} {cards.length === 1 ? 'card' : 'cards'}
                   {deck.due_count > 0 ? ` · ${deck.due_count} due` : ''}
                   {deck.description ? ` · ${deck.description}` : ''}
@@ -374,11 +392,11 @@ export default function DeckDetail() {
                   ) : (
                     <>
                       <CardHeader>
-                        <div className="flex items-start justify-between gap-2">
-                          <CardTitle className="text-base">
+                        <div className="flex min-w-0 items-start justify-between gap-2">
+                          <CardTitle className="min-w-0 break-words text-base">
                             {card.question}
                           </CardTitle>
-                          <div className="flex items-center gap-1">
+                          <div className="flex shrink-0 items-center gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -423,11 +441,13 @@ export default function DeckDetail() {
                             </AlertDialog>
                           </div>
                         </div>
-                        <CardDescription>{card.answer}</CardDescription>
+                        <CardDescription className="break-words">
+                          {card.answer}
+                        </CardDescription>
                       </CardHeader>
                       {card.source && (
                         <CardContent>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="break-words text-xs text-muted-foreground">
                             Source: {card.source}
                           </p>
                         </CardContent>

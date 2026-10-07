@@ -228,11 +228,15 @@ plus loading/error/no-history states.
   dev-server routes → built-CSS utility check (temp scripts, deleted after).
 - Latest (Phase 11): build ✓ · 27/27 perf smoke · 10 routes + 5 modules HTTP 200
   · Lighthouse after-run 94/100/100/100 (stored JSON, temp dir). Interactive
-  browser QA still pending — see AGENTS.md risks.
+  QA continued in Phase 13 (see below).
 - Latest (Phase 12): lint 1 warning · build ✓ · 56/56 security smoke · dist +
   git secret scans clean · local server + headless Chrome proved the header set
   on the wire, full Auth render under CSP with zero violations, and the
   inline-script probe blocked.
+- Latest (Phase 13): lint 1 warning · dummy-env build ✓ · **179/179 CDP harness
+  checks, 0 console errors** (production `dist/` + exact `vercel.json` headers,
+  backend mocked) · final clean rebuild without env vars (0 `qa-dummy` in
+  `dist/`).
 
 ## 11. Security architecture (Phase 12)
 
@@ -267,3 +271,26 @@ server, no route handlers, no CSRF surface. Trust boundaries = Supabase
 - **Verification:** 56/56 smoke, dist + history secret scans, local-server +
   headless-Chrome header/CSP proof. **Not verified:** live RLS/triggers, headers
   on the real URL, logged-in flows → `PRODUCTION_CHECKLIST.md`.
+
+## 12. Cross-browser & device QA (Phase 13)
+
+Full detail + evidence in `CROSS_BROWSER_QA.md`. Method: a temp-dir CDP harness
+drives headless Chrome against the **production `dist/` served with the exact
+`vercel.json` header set**, with Supabase + AI providers intercepted at the
+network layer (deterministic fixtures) — reproducible, no live-backend claim.
+10 scenarios × 12 widths (375…1440 incl. sidebar/bottom-nav edges), keyboard +
+dark + reduced-motion emulation, overflow/touch-target scans, 36 screenshots →
+**179/179 checks, 0 console errors**.
+
+- **Fixed (app):** DeckDetail long-text containment (row `min-w-0`,
+  `break-words` title, `shrink-0` actions — a 240-char token used to stretch
+  the page 3059 px; header/breadcrumb long-name wrapping) · DeckDetail
+  inline-edit focus (rAF → question textarea; cancel → that row's Edit button) ·
+  MobileMenu focus return (`returnFocusRef` + `onCloseAutoFocus` preventDefault
+  → hamburger) · dialog close 28 → 32 px · Upload "Browse files" 28 → 36 px
+  (project's 30 px floor; WCAG 2.5.8 AA already passed).
+- **Documented, not changed:** `Review.handleRating` lacks `try/finally`
+  (CB-07 — unreachable with production FSRS states 0–3; review logic out of
+  phase scope) · compact 28–36 px control sizes kept (44 px AAA not adopted) ·
+  Firefox/WebKit/physical devices Not Tested (static inspection only) ·
+  Groq/Cerebras real-endpoint CORS unknown.

@@ -12,10 +12,16 @@ import UserMenu from '@/components/UserMenu'
  * - nested routes → breadcrumb trail (last segment acts as the title)
  * - below lg      → hamburger opens the mobile menu
  */
-export default function TopBar({ title, breadcrumbs, onOpenMenu }) {
+export default function TopBar({
+  title,
+  breadcrumbs,
+  onOpenMenu,
+  menuButtonRef,
+}) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
       <Button
+        ref={menuButtonRef}
         variant="ghost"
         size="icon"
         className="lg:hidden"

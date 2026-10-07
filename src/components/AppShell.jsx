@@ -36,6 +36,7 @@ export default function AppShell() {
   const { decks } = useDecks()
   const [menuOpen, setMenuOpen] = useState(false)
   const scrollRef = useRef(null)
+  const menuButtonRef = useRef(null)
   const { title, breadcrumbs } = getPageMeta(pathname, decks)
 
   // Reset scroll + keep the tab title in step with the route (DOM-only, no
@@ -54,6 +55,7 @@ export default function AppShell() {
           title={title}
           breadcrumbs={breadcrumbs}
           onOpenMenu={() => setMenuOpen(true)}
+          menuButtonRef={menuButtonRef}
         />
 
         <main
@@ -79,7 +81,11 @@ export default function AppShell() {
         <MobileNav />
       </div>
 
-      <MobileMenu open={menuOpen} onOpenChange={setMenuOpen} />
+      <MobileMenu
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        returnFocusRef={menuButtonRef}
+      />
     </div>
   )
 }

@@ -19,7 +19,7 @@ FastRev — a free-tier spaced-repetition flashcard web app for students.
 
 ## Current phase
 
-**Phase 13 — not yet defined.**
+**Phase 14 — not yet defined.**
 Phases 0–6 are complete: project setup, Supabase schema/auth, deck CRUD, review +
 FSRS, AI generation, analytics + docs, schema repair, material import, and UI/UX
 plan Phases 1–8 (design system, app shell, dashboard/decks, review focus mode,
@@ -54,6 +54,21 @@ Auth screen under CSP with zero violations, inline-script probe blocked). **Outs
 (user steps):** run the 0002 SQL + verify live RLS, confirm Vercel env vars, check
 headers on the deployed URL. See `AGENTS.md` → Completed Phases +
 `architecture.md` → § Security & Production Readiness (Phase 12).
+**Phase 13 — Cross-Browser & Device QA completed 2026-10-07**:
+`CROSS_BROWSER_QA.md` (method, environment/responsive/browser-compat tables,
+issues **CB-01…CB-07**) — evidence came from a temp-dir headless-Chrome CDP
+harness running the production build with the real `vercel.json` headers and a
+mocked backend: **179/179 checks, 0 console errors**, 10 scenarios × 12 widths
+(375…1440 incl. 639/640, 767/768, 1023/1024 edges) + dark/reduced-motion +
+36 screenshots. App fixes: DeckDetail long-text containment (240-char unbroken
+token no longer overflows at 375/1440) + header long-name wrapping; inline edit
+focus (question textarea on Edit, Edit-button refocus on Cancel/save); MobileMenu
+close now returns focus to the hamburger; dialog close 28→32 px; Upload
+"Browse files" 28→36 px (30 px project floor). Documented-only: `handleRating`
+has no try/finally (CB-07, unreachable in production), compact touch targets
+kept, Firefox/Safari/physical devices Not Tested. Harness lessons (PostgREST
+`.single()` replies, ts-fsrs state 0–3, provider CORS preflight) are recorded in
+`AGENTS.md` → Key Decisions § Phase 13.
 
 ## Tech stack (locked)
 
