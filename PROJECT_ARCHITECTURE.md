@@ -23,6 +23,7 @@ Browser (React 19 SPA, static on Vercel)
     └── Material extraction     PDF (pdf.js local) · docx (mammoth local) ·
                                 images (Gemini vision OCR)
         → no application server anywhere; Vercel serves static files only.
+          Security headers + CSP come from `vercel.json` (Phase 12).
 ```
 
 ## 2. Data model (Supabase)
@@ -41,6 +42,11 @@ Three tables, each with `user_id` + RLS (schema: `supabase/schema.sql`):
 RLS: enable on all tables; per-user policies on select/insert/update/delete
 (`auth.uid() = user_id`). Aggregation happens **client-side** (two queries) —
 accepted free-tier trade-off (Supabase 1000-row default cap).
+Phase 12 adds defense-in-depth (migration `0002_authorization_hardening.sql`,
+**not yet executed**): `SECURITY DEFINER` ownership triggers
+(`assert_deck_owner` / `assert_card_owner`) reject cross-user inserts/repoints
+on `cards`/`review_logs`, and `NOT VALID` length CHECKs bound deck/card text
+fields — mirroring the UI `maxLength` rules.
 
 ## 3. Routing & layout architecture
 
@@ -175,8 +181,10 @@ plus loading/error/no-history states.
   `AlertDialogAction` with the solid **`danger`** button variant so the
   destructive action is visually distinct from primary actions (Phase 10, U-07);
   trim-first validation guards every name/question/answer form (U-02/U-03).
-- **Theming:** pre-paint inline script in `index.html` sets `.dark` before React
-  loads; `lib/theme.js` helpers + `ThemeToggle` persist/sync (`fastrev_theme`,
+- **Theming:** the external pre-paint script `public/theme-init.js` (loaded via
+  `<script src>` from `index.html` — external, never inline, so CSP
+  `script-src 'self'` needs no `unsafe-inline`) sets `.dark` before React loads;
+  `lib/theme.js` helpers + `ThemeToggle` persist/sync (`fastrev_theme`,
   cross-tab).
 - **State-driven color tokens:** success/warning/danger (reviews, errors,
   analytics); `destructive` is an alias so stock shadcn classes resolve to
@@ -221,3 +229,41 @@ plus loading/error/no-history states.
 - Latest (Phase 11): build ✓ · 27/27 perf smoke · 10 routes + 5 modules HTTP 200
   · Lighthouse after-run 94/100/100/100 (stored JSON, temp dir). Interactive
   browser QA still pending — see AGENTS.md risks.
+- Latest (Phase 12): lint 1 warning · build ✓ · 56/56 security smoke · dist +
+  git secret scans clean · local server + headless Chrome proved the header set
+  on the wire, full Auth render under CSP with zero violations, and the
+  inline-script probe blocked.
+
+## 11. Security architecture (Phase 12)
+
+Threat model (full detail in `SECURITY_AUDIT.md`): a static SPA — no application
+server, no route handlers, no CSRF surface. Trust boundaries = Supabase
+(PostgREST/Auth + RLS + public anon key) and the AI providers (user-held keys).
+
+- **Headers & CSP (`vercel.json`):** every response gets CSP (`script-src 'self'`,
+  `connect-src` limited to `https://*.supabase.co` + Gemini/Groq/Cerebras origins,
+  `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`) plus
+  X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy, COOP/CORP,
+  HSTS. No `unsafe-inline` anywhere — that is why the theme bootstrap is the
+  external `public/theme-init.js`. Vercel applies these to deep routes too;
+  `npm run dev`/`preview` do NOT (test with a static server).
+- **Fail-safe config:** `supabaseConfigured` (lib/supabase.js); production shows
+  a friendly "isn't configured yet" screen instead of a broken app.
+- **Error safety:** display points map raw messages through `friendlyDbError`
+  (lib/errors.js) / `friendlyAuthError`; `ErrorState` raw detail and
+  `ErrorBoundary` message are dev-only; hooks store raw for debugging.
+- **Input validation, two boundaries:** UI `maxLength` + trim guards (deck
+  100/500, card 2000/2000/500, notes 60,000) and DB `NOT VALID` length CHECKs
+  + ownership triggers (pending execution — SEC-05).
+- **AI/provider hygiene:** `MAX_CARDS = 40` + field truncation; file-size guards
+  (10 MB image / 25 MB doc) before parsing; keys only in localStorage, sent only
+  to their provider (also enforced by `connect-src`); enumeration-safe signup copy.
+- **Secrets:** `.env*` gitignored, `.env.example` names only; no secret in git
+  history or the `dist/` bundle (pattern-scanned).
+- **Accepted risks (documented):** anon key public-by-design (RLS); localStorage
+  keys (single-user app); `npm audit` 3 moderate runtime (`mammoth → sprintf-js`,
+  SEC-14); browser-side AI chain (own-quota only — future Edge Function path,
+  SEC-12); email confirmation ON.
+- **Verification:** 56/56 smoke, dist + history secret scans, local-server +
+  headless-Chrome header/CSP proof. **Not verified:** live RLS/triggers, headers
+  on the real URL, logged-in flows → `PRODUCTION_CHECKLIST.md`.

@@ -43,7 +43,11 @@ export function friendlyAuthError(error) {
     return 'Email or password is incorrect.'
   }
   if (message.includes('already registered') || message.includes('already exists')) {
-    return 'An account with this email already exists. Try signing in instead.'
+    // Deliberately non-committal: never confirm to the caller that an
+    // account exists for this email (SEC-09 — account enumeration).
+    // Anyone calling the Supabase Auth API directly still gets the
+    // provider's raw response; client copy cannot change that.
+    return "That sign-up couldn't be completed. If you already have an account, try signing in instead."
   }
   if (message.includes('email not confirmed')) {
     return 'Confirm your email first — open the link we sent you, then sign in.'

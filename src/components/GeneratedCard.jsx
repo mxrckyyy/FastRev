@@ -87,6 +87,7 @@ export default function GeneratedCard({
             <Textarea
               id={`edit-question-${row.id}`}
               ref={questionRef}
+              maxLength={2000}
               placeholder="Question"
               className="min-h-16 max-h-40"
               value={draft.question}
@@ -105,6 +106,7 @@ export default function GeneratedCard({
             </label>
             <Textarea
               id={`edit-answer-${row.id}`}
+              maxLength={2000}
               placeholder="Answer"
               className="min-h-16 max-h-40"
               value={draft.answer}
@@ -126,6 +128,7 @@ export default function GeneratedCard({
             </label>
             <Input
               id={`edit-source-${row.id}`}
+              maxLength={500}
               placeholder="e.g. Textbook p. 42"
               value={draft.source}
               onChange={(event) => setField('source', event.target.value)}

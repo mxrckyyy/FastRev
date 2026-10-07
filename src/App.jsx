@@ -4,6 +4,7 @@ import AppShell from '@/components/AppShell'
 import { useAuth } from '@/hooks/useAuth'
 import Auth from '@/pages/Auth'
 import Dashboard from '@/pages/Dashboard'
+import { supabaseConfigured } from '@/lib/supabase'
 
 // Route-level code splitting (Phase 11 perf): only the first-paint-critical
 // modules (shell, Auth, Dashboard) stay in the main chunk. Everything else —
@@ -40,6 +41,17 @@ function GuestRoute({ children }) {
 }
 
 export default function App() {
+  // Production must never fall back to the placeholder Supabase client
+  // (SEC-20): if the env vars were missing at build time the app would be
+  // silently broken — say so plainly instead. Dev keeps placeholders.
+  if (!import.meta.env.DEV && !supabaseConfigured) {
+    return (
+      <FullPageMessage>
+        FastRev isn&apos;t configured yet — Supabase settings are missing from
+        this deployment.
+      </FullPageMessage>
+    )
+  }
   return (
     <Routes>
       <Route

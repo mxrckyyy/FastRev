@@ -106,7 +106,7 @@ export function useDecks() {
 
   async function createDeck(name, description) {
     if (!user) {
-      const err = { message: 'You must be signed in to create a deck.' }
+      const err = { message: 'You must be signed in to create a deck.', friendly: true }
       setError(err.message)
       return { error: err }
     }

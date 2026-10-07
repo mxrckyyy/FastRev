@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { friendlyDbError } from '@/lib/errors'
 
 /**
  * Create-deck dialog (name + optional description). The form logic is the
@@ -44,7 +45,7 @@ export default function CreateDeckDialog({ createDeck, trigger }) {
     try {
       const { error } = await createDeck(name.trim(), description.trim())
       if (error) {
-        setFormError(error.message)
+        setFormError(friendlyDbError(error))
         return
       }
       toast.success(`Deck “${name.trim()}” created`)
@@ -74,6 +75,7 @@ export default function CreateDeckDialog({ createDeck, trigger }) {
             <Input
               id="deck-name"
               required
+              maxLength={100}
               placeholder="e.g. Biology 101"
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -85,6 +87,7 @@ export default function CreateDeckDialog({ createDeck, trigger }) {
             </label>
             <Textarea
               id="deck-description"
+              maxLength={500}
               placeholder="Optional — what is this deck about?"
               value={description}
               onChange={(event) => setDescription(event.target.value)}

@@ -37,7 +37,7 @@ export function useCards(deckId) {
 
   async function createCard(targetDeckId, { question, answer, source }) {
     if (!user) {
-      const err = { message: 'You must be signed in to add a card.' }
+      const err = { message: 'You must be signed in to add a card.', friendly: true }
       setError(err.message)
       return { error: err }
     }

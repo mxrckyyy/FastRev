@@ -19,7 +19,7 @@ FastRev — a free-tier spaced-repetition flashcard web app for students.
 
 ## Current phase
 
-**Phase 12 — not yet defined.**
+**Phase 13 — not yet defined.**
 Phases 0–6 are complete: project setup, Supabase schema/auth, deck CRUD, review +
 FSRS, AI generation, analytics + docs, schema repair, material import, and UI/UX
 plan Phases 1–8 (design system, app shell, dashboard/decks, review focus mode,
@@ -39,7 +39,21 @@ still has no UI** (documented as U-08, needs a shared decks context).
 **1,150.61 kB → 657.37 kB** (gzip 335 → 192 kB) via React.lazy route splitting
 (recharts now rides the Analytics chunk), `useDecks` in-flight request dedupe,
 meta description + `public/robots.txt`, `<main>` landmarks on the auth/loading
-screens. See `AGENTS.md` → Completed Phases + `architecture.md` → § Performance (Phase 11).
+screens. **Phase 12 — Security & Production Readiness completed 2026-10-06**:
+`SECURITY_AUDIT.md` (findings SEC-01…SEC-26) + `PRODUCTION_CHECKLIST.md`
+(verified-only boxes) — security headers + CSP in `vercel.json` (theme bootstrap
+moved to `public/theme-init.js`, no `unsafe-inline`), safe errors via
+`src/lib/errors.js` (raw detail dev-only), `maxLength` validation on every text
+field + notes 60k cap, upload 10 MB/25 MB size guards, AI output caps (40 cards),
+enumeration-safe signup copy, fail-safe config screen when env vars are missing,
+and DB hardening SQL (ownership triggers + length CHECKs in
+`supabase/migrations/0002_authorization_hardening.sql` — **written, not yet
+executed**). Verified here: lint · build · 56/56 security smoke · dist + git
+secret scans clean · local server + headless Chrome (headers on the wire, full
+Auth screen under CSP with zero violations, inline-script probe blocked). **Outstanding
+(user steps):** run the 0002 SQL + verify live RLS, confirm Vercel env vars, check
+headers on the deployed URL. See `AGENTS.md` → Completed Phases +
+`architecture.md` → § Security & Production Readiness (Phase 12).
 
 ## Tech stack (locked)
 
@@ -66,15 +80,21 @@ FastRev/
 ├── PROJECT_ARCHITECTURE.md      # current-state architecture summary
 ├── USABILITY_AUDIT.md           # Phase 10 audit: Flows A–F, 18 issues + statuses
 ├── PERFORMANCE_AUDIT.md         # Phase 11 perf audit: baseline → Lighthouse 94/100/100/100
+├── SECURITY_AUDIT.md            # Phase 12 security audit: SEC-01…SEC-26 + tests
+├── PRODUCTION_CHECKLIST.md      # Phase 12 deploy checklist (verified-only boxes)
 ├── README.md                    # setup: Supabase, AI keys, cron, Vercel deploy
-├── index.html                   # entry; inline pre-paint dark-mode bootstrap
+├── vercel.json                  # security headers + CSP for every response (Phase 12)
+├── index.html                   # entry; loads /theme-init.js (external pre-paint theme bootstrap)
 ├── vite.config.js               # react + tailwindcss plugins, @ alias (JS, not .ts)
 ├── jsconfig.json                # @/* path mapping
 ├── components.json              # shadcn config (JavaScript mode)
 ├── .env                         # VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY (gitignored)
+├── .env.example                 # names/placeholders only — copy this, never commit .env
+├── public/theme-init.js         # pre-paint dark-mode bootstrap (external for CSP)
 ├── supabase/
-│   ├── schema.sql               # canonical schema to run in SQL Editor
+│   ├── schema.sql               # canonical schema to run in SQL Editor (incl. Phase 12 hardening)
 │   ├── migrations/0001_initial_schema.sql
+│   ├── migrations/0002_authorization_hardening.sql   # triggers + CHECKs — NOT yet executed
 │   └── README.md                # how to run/verify the schema
 └── src/
     ├── main.jsx                 # ErrorBoundary + BrowserRouter + AuthProvider
@@ -98,7 +118,7 @@ FastRev/
     │   ├── useAuth.js           # AuthProvider + useAuth (signIn/signUp/signOut)
     │   ├── useDecks.js, useCards.js, useReviews.js, useAnalytics.js
     ├── lib/
-    │   ├── supabase.js          # client singleton (placeholder fallback)
+    │   ├── supabase.js          # client singleton (placeholder fallback) + supabaseConfigured
     │   ├── fsrs.js              # ts-fsrs wrapper (scheduleCard, Rating)
     │   ├── ai.js                # provider chain + transcription + key helpers
     │   ├── extract.js           # PDF/image/.docx/txt material extraction
@@ -106,6 +126,7 @@ FastRev/
     │   ├── ratings.js           # RATINGS config (Again/Hard/Good/Easy, keys 1–4)
     │   ├── theme.js             # dark-mode read/apply/toggle/subscribe
     │   ├── authForm.js          # auth validation + Supabase error → friendly copy
+    │   ├── errors.js            # friendlyDbError: raw DB error → safe copy at render
     │   └── utils.js             # cn()
     └── pages/
         ├── Auth.jsx             # login/signup — Phase 7 screen (AuthView + state)
@@ -173,8 +194,10 @@ Google/social OAuth, remember-me, profile editing.
 - **Control boundaries:** `--border` is the 1 px structural hairline (~1.3:1, by
   design); `--input` draws input/textarea/select/outline-button edges and is
   calibrated ≥3:1 vs all surfaces in both themes (WCAG 1.4.11 — Final QA fix).
-- Dark mode: `.dark` on `<html>`, bootstrapped pre-paint by inline script in
-  `index.html`, persisted in localStorage `fastrev_theme` (`src/lib/theme.js`).
+- Dark mode: `.dark` on `<html>`, bootstrapped pre-paint by the **external**
+  `public/theme-init.js` (loaded with `<script src>` from `index.html` — external
+  so CSP `script-src 'self'` needs no inline-script allowance), persisted in
+  localStorage `fastrev_theme` (`src/lib/theme.js`).
 - Animation: `tw-animate-css` + CSS transitions only (**framer-motion is not
   installed and must not be added**); global `prefers-reduced-motion` clamp in
   `index.css`, plus explicit `motion-reduce:*` variants on moving parts.
@@ -206,10 +229,12 @@ lint → build → SSR render smoke via temp `ssr-smoke.mjs` (Vite `ssrLoadModul
 `renderToString` + check assertions) → contrast audit via temp `contrast-audit.mjs`
 (oklch → WCAG ratio; ≥4.5 text / ≥3 UI, light + dark) → dev-server route/module
 HTTP 200s → built-CSS contains new utilities → delete temp scripts.
-Latest run (Phase 11 — performance): lint 1 warning · build ✓ · **27/27 perf
-smoke** (landmarks, lazy/eager split, RouteFallback, dedupe wiring, head tags) ·
-**10 routes + 5 modules HTTP 200** · Lighthouse (lab, mobile throttled)
-**94 / 100 / 100 / 100** with FCP 2.3 s, LCP 2.6 s, TBT 10 ms, CLS 0.
+Latest run (Phase 12 — security): lint 1 warning · build ✓ · **56/56 security
+smoke** (error-mapping + auth-copy units, renders, CSP/SQL/source assertions) ·
+dist + git-history secret scans clean · local server + headless Chrome: headers
+on the wire, full Auth screen under CSP with **zero violations**, inline-script
+probe **blocked**, missing-env production guard shown · `npm audit` recorded in
+`SECURITY_AUDIT.md`. (Phase 11's Lighthouse after-run: **94 / 100 / 100 / 100**.)
 
 ## Conventions worth knowing
 
@@ -238,3 +263,13 @@ smoke** (landmarks, lazy/eager split, RouteFallback, dedupe wiring, head tags) �
   Lighthouse is run against `vite preview` with a temp-dir install (never add
   lighthouse to package.json); baseline and after numbers live in
   `PERFORMANCE_AUDIT.md` — never restate scores from memory.
+- Security conventions (Phase 12): raw errors are sanitized **where they are
+  displayed** via `friendlyDbError` (`src/lib/errors.js`) / `friendlyAuthError` —
+  hooks keep raw messages (debugging), dev builds show/log raw, production never
+  does; never add an inline `<script>` (CSP `script-src 'self'` — use an external
+  file like `public/theme-init.js`); headers/CSP live only in `vercel.json`
+  (not applied by `npm run dev`/`preview`); cap any new text input with
+  `maxLength` + a matching DB CHECK when the field is new; `.env` names only in
+  `.env.example`, real values never committed. Verification + open items live in
+  `SECURITY_AUDIT.md` / `PRODUCTION_CHECKLIST.md` — never claim live-deploy
+  verification that wasn't performed.

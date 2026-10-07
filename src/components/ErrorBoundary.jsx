@@ -27,9 +27,11 @@ export default class ErrorBoundary extends Component {
             The app hit an unexpected error. Your data is safe — try again, or
             reload the page if it keeps happening.
           </p>
-          <p className="max-w-md break-words font-mono text-xs text-muted-foreground">
-            {error.message || String(error)}
-          </p>
+          {import.meta.env.DEV && (
+            <p className="max-w-md break-words font-mono text-xs text-muted-foreground">
+              {error.message || String(error)}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <Button onClick={this.handleReset}>

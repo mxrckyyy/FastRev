@@ -36,6 +36,7 @@ import { Textarea } from '@/components/ui/textarea'
 import LoadingButton from '@/components/LoadingButton'
 import { useCards } from '@/hooks/useCards'
 import { useDecks } from '@/hooks/useDecks'
+import { friendlyDbError } from '@/lib/errors'
 
 function CardFormFields({ form, setForm, idPrefix }) {
   return (
@@ -47,6 +48,7 @@ function CardFormFields({ form, setForm, idPrefix }) {
         <Textarea
           id={`${idPrefix}-question`}
           required
+          maxLength={2000}
           placeholder="e.g. What is the powerhouse of the cell?"
           value={form.question}
           onChange={(event) =>
@@ -61,6 +63,7 @@ function CardFormFields({ form, setForm, idPrefix }) {
         <Textarea
           id={`${idPrefix}-answer`}
           required
+          maxLength={2000}
           placeholder="e.g. The mitochondria"
           value={form.answer}
           onChange={(event) => setForm({ ...form, answer: event.target.value })}
@@ -72,6 +75,7 @@ function CardFormFields({ form, setForm, idPrefix }) {
         </label>
         <Input
           id={`${idPrefix}-source`}
+          maxLength={500}
           placeholder="Optional — e.g. page 42, lecture 3"
           value={form.source}
           onChange={(event) => setForm({ ...form, source: event.target.value })}
@@ -143,6 +147,8 @@ export default function DeckDetail() {
 
   const loading = decksLoading || cardsLoading
   const error = decksError || cardsError
+  // Raw hook messages are shown only through the friendly mapper (SEC-03).
+  const errorText = error ? friendlyDbError(error) : null
 
   async function handleAdd(event) {
     event.preventDefault()
@@ -164,7 +170,7 @@ export default function DeckDetail() {
         source: addForm.source.trim(),
       })
       if (error) {
-        setAddFormError(error.message)
+        setAddFormError(friendlyDbError(error))
         return
       }
       // Keep the dialog open for batch entry (U-05): clear the fields,
@@ -214,7 +220,7 @@ export default function DeckDetail() {
         source: editForm.source.trim(),
       })
       if (error) {
-        setEditFormError(error.message)
+        setEditFormError(friendlyDbError(error))
         return
       }
       toast.success('Card updated')
@@ -246,7 +252,7 @@ export default function DeckDetail() {
         {!deck ? (
           <div className="space-y-4">
             <p role="alert" className="text-sm text-destructive">
-              {error ? error : 'Deck not found.'}
+              {errorText || 'Deck not found.'}
             </p>
             <Button variant="outline" asChild>
               <Link to="/decks">Back to decks</Link>
@@ -312,7 +318,7 @@ export default function DeckDetail() {
 
             {error && (
               <p role="alert" className="text-sm text-destructive">
-                {error}
+                {errorText}
               </p>
             )}
 

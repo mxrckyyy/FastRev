@@ -10,23 +10,10 @@
       content="FastRev — free spaced-repetition flashcards for students. Create decks, turn your notes into cards with AI, and review with the FSRS algorithm."
     />
     <title>FastRev</title>
-    <script>
-      // Apply the saved theme before first paint (see src/lib/theme.js).
-      (function () {
-        try {
-          var stored = localStorage.getItem('fastrev_theme')
-          var theme =
-            stored === 'light' || stored === 'dark'
-              ? stored
-              : window.matchMedia('(prefers-color-scheme: dark)').matches
-                ? 'dark'
-                : 'light'
-          if (theme === 'dark') document.documentElement.classList.add('dark')
-        } catch (e) {
-          /* localStorage blocked — stay on the light default */
-        }
-      })()
-    </script>
+    <!-- Theme bootstrap is an external file (public/theme-init.js) so the
+         production CSP can be `script-src 'self'` with no unsafe-inline.
+         It still runs render-blocking before first paint — no theme flash. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

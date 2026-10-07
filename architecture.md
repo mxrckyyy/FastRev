@@ -23,7 +23,7 @@
 - `src/components/DeckCard.jsx` — deck preview card (name → due badge → description → count → Open → Delete) + `DeckCardSkeleton` + `CreateDeckCard` (dashed invitation tile); delete outcome reported via sonner toast (Phase 8).
 - `src/components/CreateDeckDialog.jsx` — extracted create-deck dialog (self-contained form; calls the caller's `createDeck`), reused by DeckList and the Dashboard empty state; submit uses `LoadingButton` + success toast (Phase 8).
 - `src/components/EmptyState.jsx` — shared empty state (icon, heading, description, CTA slot).
-- `src/components/ErrorState.jsx` — shared loading-error panel (icon, friendly message, optional raw detail, real retry button).
+- `src/components/ErrorState.jsx` — shared loading-error panel (icon, friendly message, optional raw detail shown **dev-only** since Phase 12, real retry button).
 - `src/components/ReviewShell.jsx` — focus-mode frame for `/review`: Exit + ThemeToggle header, pinned progress slot, centered scrollable `<main>`, optional footer slot (shortcut hint).
 - `src/components/ReviewProgress.jsx` — position counter + determinate bar with `role="progressbar"` / `aria-valuetext`.
 - `src/components/Flashcard.jsx` — question/answer card (focusable question heading, reveal block, source line).
@@ -40,6 +40,7 @@
 - `src/lib/extract.js` — material import: PDF (pdf.js, local), images (Gemini vision), .docx (mammoth), .txt/.md.
 - `src/lib/theme.js` — dark-mode helpers (read/apply/toggle/subscribe, localStorage `fastrev_theme`).
 - `src/lib/authForm.js` — pure auth-form logic: `validateAuthEmail` / `validateAuthPassword` (signup-only 6-char minimum) / `friendlyAuthError` (Supabase message → friendly copy).
+- `src/lib/errors.js` — `friendlyDbError(error, fallback)` (Phase 12): maps raw Postgres/PostgREST messages (RLS denial, length check, uuid syntax, network…) to safe copy at **render points**; raw text is logged to console and shown only in dev builds.
 - `src/index.css` — design system: Tailwind v4 `@theme` tokens + light/dark variables.
 - `src/components/ThemeToggle.jsx` — light/dark toggle button used in every page header.
 - `src/hooks/useAuth.js` — Auth context (user, signIn, signUp, signOut).
@@ -65,7 +66,7 @@
 Tailwind CSS v4, CSS-first — **no `tailwind.config.js` exists and none may be added**. Everything lives in `src/index.css`:
 
 - **Token layer** — `@theme inline` maps semantic names to CSS variables (`--background`, `--foreground`, `--card`, `--border`, `--primary`, `--muted`, `--success`, `--warning`, `--danger`, each with a `-foreground` pair, plus `--chart-*` and `--elevated`). Components consume utilities only (`bg-primary`, `text-muted-foreground`, `bg-success/10`, …) — never hardcoded hex/oklch in JSX. The one exception is Recharts, which takes inline `var(--token)` styles.
-- **Themes** — all values are oklch variables defined under `:root` (light) and `.dark`. Dark mode is a class, not an inversion: three slate steps form an elevation ladder (background → card → elevated) with translucent white borders. `.dark` on `<html>` is applied before first paint by the inline script in `index.html`, persisted in localStorage `fastrev_theme`, and toggled by `src/lib/theme.js` / `ThemeToggle.jsx`. `@custom-variant dark (&:is(.dark *))` rebinds `dark:` to the class (overriding Tailwind's default media-query variant).
+- **Themes** — all values are oklch variables defined under `:root` (light) and `.dark`. Dark mode is a class, not an inversion: three slate steps form an elevation ladder (background → card → elevated) with translucent white borders. `.dark` on `<html>` is applied before first paint by the external bootstrap script `public/theme-init.js` (loaded with `<script src="/theme-init.js">` from `index.html` — external, not inline, so `script-src 'self'` needs no `unsafe-inline`; moved out of `index.html` in Phase 12), persisted in localStorage `fastrev_theme`, and toggled by `src/lib/theme.js` / `ThemeToggle.jsx`. `@custom-variant dark (&:is(.dark *))` rebinds `dark:` to the class (overriding Tailwind's default media-query variant).
 - **Typography** — Inter Variable (`@fontsource-variable/inter`), fixed scale `12/14/16/18/24/32/48` (`--text-xs … --text-3xl`) with per-size line-heights (body 1.5, headings 1.2); two weights in practice (400 body, 500/600 titles).
 - **Radius** — one base `--radius: 0.75rem` multiplied per step (`--radius-sm/md/lg/xl/…`); buttons/inputs `rounded-lg`, cards/dialogs `rounded-xl`.
 - **Spacing** — stock Tailwind scale only (`space-y-*`, `gap-*`, `px-*`); page containers are `mx-auto max-w-2xl/3xl/5xl px-4 sm:px-6` so 375 px viewports keep comfortable gutters; breakpoints `sm:` 640 / `lg:` 1024 for grids (`sm:grid-cols-2 lg:grid-cols-3`).
@@ -376,6 +377,75 @@ recharts now rides the lazy `Analytics` chunk (387 kB); route pages are 0.5–26
 ### Declined (documented, not silent)
 Chart animations (≤14-point datasets — no measurable win), font preload (subsets + swap already right; CLS 0), merging `submitReview`'s read→update→insert round trips (order is load-bearing; needs an RPC = schema change), a lighter analytics query (streak/retention need every row), production source maps. Lab-only numbers — no field data; logged-in lazy navigation still needs one manual browser pass.
 
+## Security & Production Readiness (Phase 12)
+
+Audit-first phase: every finding is recorded in `SECURITY_AUDIT.md` (SEC-01…SEC-26 with
+severity + status), verification in `PRODUCTION_CHECKLIST.md`. Threat model: static SPA —
+**no application server, no route handlers, no CSRF surface**; the two trust boundaries are
+Supabase (PostgREST/Auth, RLS + anon key) and the three AI providers (user-supplied keys).
+
+### What the app ships with (verified here)
+
+- **Security headers + CSP** via `vercel.json` (Vercel applies them to every response,
+  including deep routes — verified locally against the built app): CSP with
+  `script-src 'self'` (no inline/eval), `connect-src` allowlisting only
+  `https://*.supabase.co` + the three provider origins, `object-src 'none'`,
+  `base-uri 'self'`, `frame-ancestors 'none'` + `X-Frame-Options: DENY`, nosniff,
+  Referrer-Policy, Permissions-Policy, COOP/CORP, HSTS, `X-Permitted-Cross-Domain-Policies`.
+  The inline theme bootstrap was moved to `public/theme-init.js` so no `unsafe-inline`
+  is needed. A deliberate inline-script probe was **blocked** by the CSP in headless
+  Chrome; the production bundle rendered with **zero CSP violations**.
+- **Fail-safe config**: `supabase.js` exports `supabaseConfigured`; in production,
+  `App.jsx` renders a friendly "FastRev isn't configured yet" screen instead of a
+  broken app when env vars are missing (dev keeps the placeholder warn).
+- **Safe errors everywhere**: raw DB/provider text is sanitized at render points
+  through `src/lib/errors.js` (`friendlyDbError`) / `authForm.js` (`friendlyAuthError`);
+  `ErrorState` raw detail and `ErrorBoundary`'s message are **dev-only**; hooks still
+  store raw messages for debugging — sanitizing happens where text is displayed.
+- **Input validation, both boundaries**: UI `maxLength` (deck 100/500, card 2000/2000/500,
+  notes 60,000) + trim guards, and DB `CHECK` constraints (see schema below).
+- **AI output caps**: `normalizeCard` truncates fields to the same limits and the parse
+  step slices the list to `MAX_CARDS = 40`.
+- **Upload guards**: 10 MB images / 25 MB documents checked before parsing; MIME **and**
+  extension validated; nothing is ever stored server-side.
+- **Enumeration-safe auth copy**: duplicate sign-up returns a non-committal message.
+- **Secret hygiene**: `.env*` gitignored (`.env.example` documents names only), no secret
+  ever committed (git history + `dist/` bundle pattern-scanned clean), API keys live only
+  in localStorage and go only to their provider origin (same-origin script constraint +
+  `connect-src` both enforce this).
+
+### DB hardening (written, **not yet executed**)
+
+`supabase/migrations/0002_authorization_hardening.sql` (same content appended to
+`supabase/schema.sql`), all idempotent:
+- `assert_deck_owner` / `assert_card_owner` — `SECURITY DEFINER` triggers rejecting any
+  `cards` / `review_logs` insert-or-repoint that crosses user ownership (defense in depth
+  behind RLS).
+- `NOT VALID` length `CHECK` constraints on deck name/description, card question/answer/source.
+
+Honest limitation: this environment has no DB credentials, so the SQL was syntax-reviewed
+only — **live RLS state and the new triggers remain unverified** (SEC-05, top checklist item).
+
+### Accepted risks (documented, not silent)
+
+- Anon key is public-by-design (protected by RLS); no service-role key anywhere client-side.
+- API keys in localStorage = single-user-app trade-off (same-origin readable) — never add
+  third-party scripts to the origin.
+- `npm audit`: 7 high findings are dev-only (shadcn CLI chain); 3 moderate runtime
+  findings are `mammoth → sprintf-js` with **no non-breaking fix** (SEC-14).
+- AI chain runs in the browser: an abuser can only burn **their own** quota; if this ever
+  matters, move generation to an Edge Function with per-user quotas (SEC-12, future work).
+- Email confirmation stays ON in production (US-15).
+
+### Verification (Phase 12)
+
+`npm run lint` (1 tolerated warning) · `npm run build` ✓ · **56/56 security smoke**
+(mapper/auth unit cases, renders, 35 source/config assertions incl. CSP + SQL content) ·
+secret scan of `dist/` clean · git history scan clean · local server + headless Chrome:
+headers on the wire for `/` and `/auth`, full Auth screen rendered under CSP with zero
+violations, inline-script probe blocked, missing-config screen shown · `npm audit` run.
+**Not verified:** live Supabase RLS/triggers, headers on the real URL, authenticated flows.
+
 ## Database Schema (Supabase)
 - `decks` (id, user_id, name, description, created_at)
 - `cards` (
@@ -386,12 +456,15 @@ Chart animations (≤14-point datasets — no measurable win), font preload (sub
 - `review_logs` (id, card_id, user_id, rating, reviewed_at)
 
 All tables have RLS enabled with `auth.uid() = user_id` policies.
+Phase 12 adds (0002 migration, pending execution): ownership triggers
+(`assert_deck_owner` / `assert_card_owner`) + `NOT VALID` length CHECK constraints —
+see Security section above.
 
 ## External Services
 - Supabase (DB, Auth, RLS, pgvector)
 - Google Gemini (gemini-3.8-flash, card generation + image text transcription)
 - Groq (`openai/gpt-oss-120b`) / Cerebras (`llama-3.3-70b`) — fallback LLM providers
-- Vercel (frontend hosting)
+- Vercel (frontend hosting; `vercel.json` supplies the security-header set — see Security section)
 
 ## Data Flow: Card Generation
 1. User pastes notes in `Upload.jsx`, or imports a file (button / drag-and-drop → `extract.js` extracts text into the notes box; images are transcribed via `ai.js transcribeImage` using the user's Gemini key).

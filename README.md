@@ -25,14 +25,18 @@ React 19 + Vite 8 · Tailwind CSS v4 · shadcn/ui (JavaScript mode) · Supabase 
    npm install
    ```
 
-3. Create `.env` in the project root:
+3. Create `.env` in the project root by copying the template (`.env.example`):
 
-   ```env
-   VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-   VITE_SUPABASE_ANON_KEY=YOUR-ANON-KEY
+   ```sh
+   copy .env.example .env
    ```
 
-   Both values come from **Supabase Dashboard → Project Settings → API**. The app boots with placeholder warnings if these are empty, but auth and data need real values.
+   Then fill in the two values from **Supabase Dashboard → Project Settings → API**
+   (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`). `.env` is gitignored — never
+   commit real values or paste them into docs/code. The app boots with
+   placeholder warnings in development if these are empty (production builds
+   show a clear configuration message instead), but auth and data need real
+   values.
 
 4. Run the dev server:
 
@@ -46,11 +50,13 @@ React 19 + Vite 8 · Tailwind CSS v4 · shadcn/ui (JavaScript mode) · Supabase 
 
 1. Create a free project at [supabase.com](https://supabase.com) (Free tier).
 2. Open **SQL Editor → New query**, paste the entire contents of
-   [`supabase/migrations/0001_initial_schema.sql`](supabase/migrations/0001_initial_schema.sql), and run it.
+   [`supabase/schema.sql`](supabase/schema.sql), and run it.
    - Creates `decks`, `cards`, `review_logs` + indexes.
    - Enables **RLS** on all three tables with `auth.uid() = user_id` policies (select/insert/update/delete) — each user sees only their own rows.
-   - Safe to re-run (drops policies before recreating them).
-3. **Email confirmation:** Dashboard → **Authentication → Email** → turn **Confirm email** *off* for smooth testing (leave it on for production if you prefer).
+   - Adds the Phase 12 hardening: cross-table ownership triggers + length `CHECK` constraints (existing projects can run [`supabase/migrations/0002_authorization_hardening.sql`](supabase/migrations/0002_authorization_hardening.sql) alone).
+   - Safe to re-run (drops policies before recreating it; idempotent guards throughout).
+   - **Verify RLS** afterwards — see [supabase/README.md](supabase/README.md) § 4.
+3. **Email confirmation:** keep **Confirm email** *ON* in production (Dashboard → **Authentication → Email**) — it stops random sign-ups from activating an account. You may turn it off only for local testing convenience.
 4. Put the project URL and anon key into `.env` (see above).
 
 > The anon key is safe to expose in the client — RLS is what protects the data.
@@ -109,6 +115,36 @@ Either way, any hit within the activity window keeps the project awake. Also sig
 5. In **Supabase → Authentication → URL Configuration**, add your Vercel domain to *Site URL* and *Redirect URLs* (`https://your-app.vercel.app`).
 6. Verify in production: sign up → create a deck → generate cards (Settings key) → run a review → open Analytics.
 
+## Security
+
+Full findings, severities and statuses live in [`SECURITY_AUDIT.md`](SECURITY_AUDIT.md);
+deployment gates live in [`PRODUCTION_CHECKLIST.md`](PRODUCTION_CHECKLIST.md).
+The short version:
+
+- **Authorization is enforced in the database (RLS)**, not in the frontend.
+  Route guards only hide UI; every read/write is scoped by
+  `auth.uid() = user_id` policies plus the Phase 12 ownership triggers
+  (a card can only reference your own deck, a review log only your own card).
+  Always keep RLS enabled (verification SQL: [supabase/README.md](supabase/README.md) § 4).
+- **Security headers** ship via [`vercel.json`](vercel.json): a Content-Security-Policy
+  (`script-src 'self'` — that is why the theme bootstrap is an external
+  `public/theme-init.js`), `frame-ancestors 'none'` / `X-Frame-Options: DENY`
+  (clickjacking), `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP
+  and HSTS. The `connect-src` allowlist covers Supabase + the three AI providers;
+  **if you enable Vercel Analytics/Speed Insights or move Supabase to a custom
+  domain, add those origins to the CSP or they will be blocked.**
+- **Secrets:** only `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` exist, both
+  client-safe by design (RLS is the boundary). AI keys live in the user's
+  localStorage and are sent only to their provider. No service-role key exists
+  in this repo — never add one to a `VITE_*` variable.
+- **Input limits:** deck/card/notes fields are length-capped in the UI *and*
+  by database `CHECK` constraints; imports are size-capped (10 MB images,
+  25 MB documents); AI output is count/length-capped before saving.
+- **Errors:** production builds show friendly copy only — raw database/API
+  messages render in development builds for debugging.
+- Supabase Free has **no automatic backups** — export your data periodically
+  if it matters (Supabase CLI `db dump` or dashboard export).
+
 ## Free-tier limits & how to avoid them
 
 | Service | Limit | Avoidance |
@@ -126,8 +162,10 @@ No paid services are used anywhere in this project.
 src/
   pages/        Auth, Dashboard, DeckList, DeckDetail, Review, Upload, Settings, Analytics
   hooks/        useAuth, useDecks, useCards, useReviews, useAnalytics
-  lib/          supabase client, fsrs wrapper, ai provider chain
+  lib/          supabase client, fsrs wrapper, ai provider chain, error mapping
   components/   ui/ (shadcn), ErrorBoundary
 supabase/
-  migrations/   0001_initial_schema.sql (run in SQL Editor)
+  schema.sql              run in SQL Editor (tables + RLS + hardening)
+  migrations/  0001_initial_schema.sql, 0002_authorization_hardening.sql
+vercel.json     production security headers (CSP, clickjacking, …)
 ```

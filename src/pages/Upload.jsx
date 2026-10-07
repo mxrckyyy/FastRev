@@ -33,10 +33,17 @@ import {
   providerLabel,
 } from '@/lib/ai'
 import { extractFromFile, SUPPORTED_INPUTS } from '@/lib/extract'
+import { friendlyDbError } from '@/lib/errors'
 import { cn } from 'cn'
 import SettingsDialog from '@/pages/Settings'
 
 let rowCounter = 0
+
+// Client-side input bounds (SEC-06 / SEC-08). Images are capped lower
+// because they are base64-encoded and sent to Gemini inline.
+const MAX_NOTES_LENGTH = 60000
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+const MAX_FILE_BYTES = 25 * 1024 * 1024
 
 function makeRow(fields = {}) {
   rowCounter += 1
@@ -64,6 +71,10 @@ function friendlyMessage(error) {
       return 'Free tier limit reached. Try again in a minute or switch provider.'
     case 'network':
       return 'Could not reach the AI provider. Check your connection and try again.'
+    case 'too_long':
+      return 'That\u2019s too much text at once. Trim the notes to under 60,000 characters and try again.'
+    case 'too_big':
+      return error?.message || 'That file is too large to import.'
     case 'unavailable':
       return (
         error?.message ||
@@ -72,7 +83,11 @@ function friendlyMessage(error) {
     case 'malformed':
       return 'The AI replied in an unexpected format. Try generating again.'
     default:
-      return error?.message || 'Something went wrong while generating cards.'
+      // Raw messages are development-only — production gets generic copy
+      // (SEC-03).
+      return import.meta.env.DEV && error?.message
+        ? error.message
+        : 'Something went wrong while generating cards.'
   }
 }
 
@@ -121,6 +136,21 @@ export default function Upload() {
 
   async function runImport(file) {
     if (importing) return
+    // Size guard before any read/parse/upload (SEC-06). `file.type` plus the
+    // extension decides which limit applies — extensions alone are never
+    // trusted elsewhere either.
+    const isImage =
+      (file.type || '').startsWith('image/') ||
+      /\.(png|jpe?g|webp|heic|heif)$/i.test(file.name || '')
+    const sizeLimit = isImage ? MAX_IMAGE_BYTES : MAX_FILE_BYTES
+    if (file.size > sizeLimit) {
+      const mb = Math.round(sizeLimit / (1024 * 1024))
+      setImportError({
+        code: 'too_big',
+        message: `That file is over ${mb} MB. Import a smaller file (or split it up) and try again.`,
+      })
+      return
+    }
     setImporting(true)
     setImportError(null)
     setImportMsg(null)
@@ -134,7 +164,14 @@ export default function Upload() {
         })
         return
       }
-      setNotes((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${text}` : text))
+      // Appending must never blow past the notes cap either (the textarea's
+      // maxLength only constrains typed input, not programmatic appends).
+      const combined = notes.trim() ? `${notes.trimEnd()}\n\n${text}` : text
+      if (combined.length > MAX_NOTES_LENGTH) {
+        setImportError({ code: 'too_long' })
+        return
+      }
+      setNotes(combined)
       setImportMsg(
         `Imported ${meta ? `${meta} of text ` : ''}from ${file.name}.`,
       )
@@ -160,6 +197,11 @@ export default function Upload() {
 
   async function handleGenerate() {
     if (generating) return
+    // Bound the prompt before any network call (SEC-08).
+    if (notes.trim().length > MAX_NOTES_LENGTH) {
+      setGenError({ code: 'too_long' })
+      return
+    }
     setGenError(null)
     setSaveError(null)
     setGenerating(true)
@@ -291,7 +333,7 @@ export default function Upload() {
         prev && savedIds.has(prev.id) ? null : prev,
       )
       setSaveError(
-        `Saved ${savedIds.size} of ${targets.length} cards. ${failure.message}`,
+        `Saved ${savedIds.size} of ${targets.length} cards. ${friendlyDbError(failure)}`,
       )
       return
     }
@@ -395,6 +437,7 @@ export default function Upload() {
                   </div>
                   <Textarea
                     id="notes"
+                    maxLength={MAX_NOTES_LENGTH}
                     placeholder="Paste your notes here — or import a PDF, screenshot, or document…"
                     className={cn(
                       'min-h-36 max-h-60',

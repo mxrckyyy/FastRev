@@ -76,7 +76,7 @@ export function useReviews() {
 
   async function submitReview(cardId, rating) {
     if (!user) {
-      const err = { message: 'You must be signed in to review cards.' }
+      const err = { message: 'You must be signed in to review cards.', friendly: true }
       setError(err.message)
       return { error: err }
     }

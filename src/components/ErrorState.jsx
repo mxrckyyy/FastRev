@@ -4,8 +4,10 @@ import { cn } from 'cn'
 
 /**
  * Shared data-loading error state: friendly heading + message, an optional
- * raw `detail` (small, for debugging) and a real retry button — only pass
- * `onRetry` when the caller actually has a refetch function.
+ * raw `detail` (development builds only — raw database/API messages must
+ * never render in production, see SECURITY_AUDIT SEC-03) and a real retry
+ * button — only pass `onRetry` when the caller actually has a refetch
+ * function.
  */
 export default function ErrorState({
   title = 'Something went wrong',
@@ -15,6 +17,7 @@ export default function ErrorState({
   retryLabel = 'Try again',
   className,
 }) {
+  const showDetail = Boolean(detail) && import.meta.env.DEV
   return (
     <div
       role="alert"
@@ -31,7 +34,7 @@ export default function ErrorState({
       </span>
       <h2 className="text-lg font-semibold">{title}</h2>
       <p className="mt-1 max-w-sm text-sm text-muted-foreground">{message}</p>
-      {detail && (
+      {showDetail && (
         <p className="mt-2 max-w-md break-words text-xs text-muted-foreground">
           {detail}
         </p>

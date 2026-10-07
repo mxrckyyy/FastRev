@@ -18,6 +18,14 @@ export const STORAGE_KEYS = {
   cerebras: 'cerebras_api_key',
 }
 
+// Output bounds for AI-generated content (SEC-07). These mirror the DB
+// CHECK constraints in supabase/schema.sql so saved cards can never trip
+// a server-side limit the client didn't already enforce.
+const MAX_CARDS = 40
+const MAX_QUESTION_LENGTH = 2000
+const MAX_ANSWER_LENGTH = 2000
+const MAX_SOURCE_LENGTH = 500
+
 const PROVIDER_LABELS = {
   gemini: `Google Gemini (${GEMINI_MODEL})`,
   groq: 'Groq (GPT-OSS 120B)',
@@ -106,7 +114,14 @@ function normalizeCard(candidate) {
   const answer = typeof candidate.answer === 'string' ? candidate.answer.trim() : ''
   if (!question || !answer) return null
   const source = typeof candidate.source === 'string' ? candidate.source.trim() : ''
-  return { question, answer, source }
+  // Never trust AI output shape or size: bound every field to the same
+  // limits the database enforces (SEC-07), so a runaway model response
+  // can't create oversized rows.
+  return {
+    question: question.slice(0, MAX_QUESTION_LENGTH),
+    answer: answer.slice(0, MAX_ANSWER_LENGTH),
+    source: source.slice(0, MAX_SOURCE_LENGTH),
+  }
 }
 
 function parseCards(rawText, provider) {
@@ -132,7 +147,7 @@ function parseCards(rawText, provider) {
       provider,
     )
   }
-  const cards = list.map(normalizeCard).filter(Boolean)
+  const cards = list.slice(0, MAX_CARDS).map(normalizeCard).filter(Boolean)
   if (cards.length === 0) {
     throw new AiError(
       'malformed',

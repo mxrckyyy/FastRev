@@ -23,6 +23,17 @@ schema has not been run in your Supabase project yet.
 The script is safe to re-run: it uses `if not exists` / `drop policy if exists`
 throughout, so running it twice changes nothing.
 
+### Existing projects (tables already created)
+
+If the tables already exist, apply the **Phase 12 security hardening** on its
+own — [`migrations/0002_authorization_hardening.sql`](./migrations/0002_authorization_hardening.sql)
+(same content as the second half of `schema.sql`):
+
+1. Paste it into a new SQL Editor query and **Run**.
+2. It adds cross-table ownership triggers (a card may only reference your own
+   deck; a review log only your own card) and length `CHECK` constraints.
+3. Also safe to re-run.
+
 ## 3. Verify the tables were created
 
 **Option A — in the SQL Editor**, run:
@@ -35,6 +46,31 @@ where table_schema = 'public'
 ```
 
 You should get three rows back.
+
+## 4. Verify Row Level Security (important)
+
+RLS is what keeps one student's decks private from every other student — the
+anon key ships in the public JavaScript bundle on purpose, so this check
+matters. In the SQL Editor run:
+
+```sql
+select c.relname, c.relrowsecurity
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relname in ('decks', 'cards', 'review_logs');
+```
+
+All three rows must show `relrowsecurity = t`. Then:
+
+```sql
+select policyname from pg_policies where schemaname = 'public';
+```
+
+should list the per-user policies (`Users can view own decks`, …).
+
+If any table shows `f`, RLS is off and **everyone holding the anon key can
+read all rows** — re-run `schema.sql` immediately.
 
 **Option B — check the Table Editor:** click **Table Editor** in the left
 sidebar; `decks`, `cards`, and `review_logs` should be listed under `public`.

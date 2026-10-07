@@ -4,7 +4,8 @@
 @import "@fontsource-variable/inter";
 
 /* Dark mode is driven by a `.dark` class on <html>, set before paint by the
-   bootstrap script in index.html (see src/lib/theme.js). */
+   bootstrap script public/theme-init.js, loaded from index.html (see
+   src/lib/theme.js). */
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

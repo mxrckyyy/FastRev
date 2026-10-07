@@ -1,6 +1,8 @@
 // Dark mode is a single `.dark` class on <html>, plus a persisted preference.
-// The initial class is applied by the inline bootstrap script in index.html so
-// there is never a flash of the wrong theme before React mounts.
+// The initial class is applied by the external bootstrap script
+// public/theme-init.js (loaded from index.html; external, not inline, so the
+// production CSP `script-src 'self'` allows it) so there is never a flash of
+// the wrong theme before React mounts.
 
 export const THEME_STORAGE_KEY = 'fastrev_theme'
 
