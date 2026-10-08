@@ -2,6 +2,8 @@
 
 Current-state architecture summary. The long-form reference is `architecture.md`
 (this file stays aligned with it; where they differ, `architecture.md` wins).
+For the fastest on-ramp see `DEVELOPER_HANDOFF.md`; for current state and
+conventions see `PROJECT_CONTEXT.md`.
 
 ## 1. High-level architecture
 
@@ -48,7 +50,41 @@ Phase 12 adds defense-in-depth (migration `0002_authorization_hardening.sql`,
 on `cards`/`review_logs`, and `NOT VALID` length CHECKs bound deck/card text
 fields — mirroring the UI `maxLength` rules.
 
-## 3. Routing & layout architecture
+## 3. Folder structure
+
+```
+FastRev/
+├── index.html                 # entry; loads external /theme-init.js (no inline script — CSP)
+├── vercel.json                # security headers + CSP for every response (Phase 12)
+├── vite.config.js             # react + tailwindcss plugins, @ alias (JS, not .ts)
+├── jsconfig.json / components.json   # editor paths + shadcn config (JavaScript mode)
+├── .env.example               # VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY names only
+├── public/theme-init.js       # pre-paint dark-mode bootstrap
+├── supabase/
+│   ├── schema.sql             # canonical schema (tables + RLS + Phase 12 hardening)
+│   ├── migrations/0001_initial_schema.sql
+│   ├── migrations/0002_authorization_hardening.sql   # triggers + CHECKs (not yet executed)
+│   └── README.md              # SQL Editor run/verify steps
+└── src/
+    ├── main.jsx               # ErrorBoundary → BrowserRouter → AuthProvider → App + Toaster
+    ├── App.jsx                # route table, guards, React.lazy split
+    ├── index.css              # THE design system (all tokens, themes, base rules)
+    ├── pages/                 # one file per route (+ DeckList content, SettingsForm)
+    ├── hooks/                 # useAuth, useDecks, useCards, useReviews, useAnalytics
+    ├── lib/                   # supabase, fsrs, ai, extract, nav, ratings, theme,
+    │                          #   authForm, errors, utils (cn)
+    ├── components/            # shell, nav, review set, upload set, shared states
+    │   └── ui/                # shadcn primitives (button, card, input, dialog,
+    │                          #   alert-dialog, textarea, checkbox, badge, skeleton,
+    │                          #   dropdown-menu)
+```
+
+Rule of thumb: **pages own route-level state**, **hooks own data access**,
+**lib holds pure logic/single sources**, **components hold reusable
+presentation**. Nothing outside `src/` executes at runtime except
+`public/theme-init.js` and the built assets.
+
+## 4. Routing & layout architecture
 
 ```
 BrowserRouter (main.jsx)
@@ -80,7 +116,7 @@ BrowserRouter (main.jsx)
   div so the chrome never unmounts while a chunk loads (spinner =
   `RouteFallback`, reduced-motion aware). `/review` has its own boundary.
 
-## 4. Auth architecture
+## 5. Auth architecture
 
 ```
 supabase.auth (email/password, email confirmation ON by default)
@@ -112,7 +148,7 @@ GuestRoute (/auth)      ProtectedLayout (everything else)
   button after a server error.
 - **Out of scope / not implemented:** password reset, social login, remember-me.
 
-## 5. Review & FSRS architecture
+## 6. Review & FSRS architecture
 
 ```
 useReviews.fetchDueCards()        cards WHERE due <= now(), RLS-scoped, limit 50
@@ -132,7 +168,7 @@ useReviews.submitReview(cardId, rating)
   `ReviewShell` / `Flashcard` / `RatingButtons` / `ShortcutHint`;
   `RATINGS` config in `src/lib/ratings.js` is the single source.
 
-## 6. AI generation & material import
+## 7. AI generation & material import
 
 ```
 Upload.jsx
@@ -141,8 +177,10 @@ Upload.jsx
       .docx → mammoth (local, lazy chunk)   .txt/.md → text
       image → transcribeImage() (Gemini vision OCR)
   → generateCards(notes, keys?) (lib/ai.js)
-      Gemini 2.5 Flash → Groq → Cerebras chain (skips providers without keys,
-      JSON-mode response, fence-stripping parse, AiError codes, 45s timeout)
+      Gemini (gemini-3.8-flash) → Groq (openai/gpt-oss-120b) →
+      Cerebras (llama-3.3-70b) chain — model IDs are pinned constants at the
+      top of ai.js (skips providers without keys, JSON-mode response,
+      fence-stripping parse, AiError codes, 45s timeout)
   → preview (GeneratedCard rows, edit/remove/select)
   → useCards.createCard() loop → redirect /decks/:id
 ```
@@ -157,7 +195,7 @@ Upload.jsx
   click can't duplicate cards; deck-load failure shows a friendly `role="alert"`
   panel with Try again.
 
-## 7. Analytics architecture
+## 8. Analytics architecture
 
 `useAnalytics` runs two RLS-scoped selects (`review_logs` with deck embed;
 `cards.due/state`) and aggregates client-side with exported pure helpers:
@@ -167,7 +205,7 @@ Upload.jsx
 Highlights, activity/trend, forecast, rating-breakdown meter, weak topics,
 plus loading/error/no-history states.
 
-## 8. Design-system architecture
+## 9. Design-system architecture
 
 - **Single token file:** `src/index.css` — Tailwind v4 `@theme inline` maps every
   token to a utility (`--color-primary` → `bg-primary`, …). Light in `:root`,
@@ -176,7 +214,8 @@ plus loading/error/no-history states.
   edges); `--input` = control boundaries (inputs, textareas, select, outline
   buttons), ≥3:1 vs surfaces in both themes (WCAG 1.4.11 — Final QA fix).
 - **Component layer:** shadcn/ui primitives under `src/components/ui/`
-  (JSX, `cn` = tailwind-merge) — extend by adding utilities/classes, never by
+  (JSX; `cn` re-exports the shadcn `cn` package — a compiled clsx +
+  tailwind-merge replacement) — extend by adding utilities/classes, never by
   hardcoding colors. Irreversible confirms (delete deck/card) render
   `AlertDialogAction` with the solid **`danger`** button variant so the
   destructive action is visually distinct from primary actions (Phase 10, U-07);
@@ -202,7 +241,26 @@ plus loading/error/no-history states.
   skeletons are shape-mirroring (DeckDetail gained a real one); no fake progress
   anywhere.
 
-## 9. External services & configuration
+## 10. API architecture
+
+There are **no first-party API routes and no server actions** — the project is
+a static SPA on Vercel; its "API surface" is exactly two outbound kinds of
+calls, both made from the browser:
+
+| Caller | Endpoint | Auth | Request → response |
+| --- | --- | --- | --- |
+| Data hooks (`useDecks` / `useCards` / `useReviews` / `useAnalytics`) | Supabase PostgREST (`/rest/v1/…`) via `@supabase/supabase-js` | Supabase project URL + **anon key** in `.env` (`VITE_*`); each request carries the signed-in user's JWT; **RLS is the real authorization** (`auth.uid() = user_id`) | PostgREST JSON: `{ data, error }` / arrays; embeds via `select=*, cards(count)` and `card:cards(deck:decks(…))` |
+| Auth (`useAuth`) | Supabase Auth (`/auth/v1/…`) | anon key | `signInWithPassword` / `signUp` / session subscription → `{ error, session?, user? }` |
+| AI generation + OCR (`lib/ai.js`) | `generativelanguage.googleapis.com`, `api.groq.com`, `api.cerebras.ai` | **user-held provider key from localStorage** (query param for Gemini, header for Groq/Cerebras) | notes/prompt → JSON array of `{ question, answer, source }`; failures throw `AiError` with `.code` ∈ `missing_key` / `invalid_key` / `rate_limit` / `unavailable` / `network` / `malformed` / `provider_error` |
+| Material extraction (`lib/extract.js`) | none (local) — except images, which go through the Gemini vision call above | n/a | file → `{ text, kind, meta }` |
+
+Security invariants: keys are never sent anywhere except their own provider
+(also enforced by the CSP `connect-src` allowlist in `vercel.json`); there is
+no service-role key anywhere; error text is sanitized at render
+(`friendlyDbError` / `friendlyAuthError`); new endpoints must never be added
+without an explicit task (the architecture has no server to host them).
+
+## 11. External services & configuration
 
 | Service              | Purpose                    | Config                                        |
 | -------------------- | -------------------------- | --------------------------------------------- |
@@ -213,7 +271,7 @@ plus loading/error/no-history states.
 | cron-job.org (opt.)  | keep Supabase awake        | user-created job (README)                     |
 | Vercel               | static hosting             | env vars must exist at build time             |
 
-## 10. Build & quality
+## 12. Build & quality
 
 - Vite 8 build. **Phase 11 split the initial chunk: 1,150.61 kB → 657.37 kB
   (gzip 335 → 192 kB)**; recharts now lives in the lazy `Analytics` chunk
@@ -237,8 +295,11 @@ plus loading/error/no-history states.
   checks, 0 console errors** (production `dist/` + exact `vercel.json` headers,
   backend mocked) · final clean rebuild without env vars (0 `qa-dummy` in
   `dist/`).
+- Latest (Phase 14 — documentation): lint 1 warning · production build ✓ ·
+  dev-server smoke 10 routes + 10 module transforms HTTP 200 · cross-document
+  consistency + file-reference checks green (no application code changed).
 
-## 11. Security architecture (Phase 12)
+## 13. Security architecture (Phase 12)
 
 Threat model (full detail in `SECURITY_AUDIT.md`): a static SPA — no application
 server, no route handlers, no CSRF surface. Trust boundaries = Supabase
@@ -272,7 +333,7 @@ server, no route handlers, no CSRF surface. Trust boundaries = Supabase
   headless-Chrome header/CSP proof. **Not verified:** live RLS/triggers, headers
   on the real URL, logged-in flows → `PRODUCTION_CHECKLIST.md`.
 
-## 12. Cross-browser & device QA (Phase 13)
+## 14. Cross-browser & device QA (Phase 13)
 
 Full detail + evidence in `CROSS_BROWSER_QA.md`. Method: a temp-dir CDP harness
 drives headless Chrome against the **production `dist/` served with the exact

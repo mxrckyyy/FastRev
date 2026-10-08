@@ -2,10 +2,21 @@
 
 A free-tier flashcard app: paste or import your study material (PDF, images, documents, or plain text), let AI turn it into atomic flashcards, and review daily with FSRS spaced repetition.
 
+## Overview
+
+- **What it is:** a single-user spaced-repetition study app (decks → cards →
+  daily reviews) with AI-assisted card creation and progress analytics.
+- **Who it is for:** students studying their own material; every account's data
+  is isolated by database Row Level Security.
+- **Status:** feature-complete through Phases 0–13 (build, lint, usability,
+  performance, security and cross-browser audits all passed — see the
+  [documentation map](#documentation-map)). Outstanding items are live-deploy
+  verification steps listed in `PRODUCTION_CHECKLIST.md`.
+
 ## Features
 
 - **Auth** — email/password sign-in via Supabase Auth (RLS-protected data)
-- **Decks** — create, rename, and delete decks; cards live inside decks
+- **Decks** — create and delete decks; cards live inside decks. (Renaming a deck has **no UI yet** — the hook exists but the feature is deliberately unimplemented, tracked as U-08 in `USABILITY_AUDIT.md`.)
 - **AI card generation** — paste notes → 10–15 flashcards, editable before saving. Provider chain: **Google Gemini (`gemini-3.8-flash`) → Groq (`openai/gpt-oss-120b`) → Cerebras**, so hitting one free-tier limit falls through to the next
 - **Material import** — drop or pick a file on the Generate Cards page: **PDF** (text extracted locally in the browser with pdf.js), **images** (screenshots/photos of pages transcribed by your Gemini key), **`.docx`** (mammoth), or **`.txt`/`.md`** — imported text lands in the notes box for you to trim before generating
 - **Reviews** — one card at a time, rated Again / Hard / Good / Easy, scheduled by **FSRS** (`ts-fsrs`)
@@ -14,7 +25,7 @@ A free-tier flashcard app: paste or import your study material (PDF, images, doc
 
 ## Tech stack
 
-React 19 + Vite 8 · Tailwind CSS v4 · shadcn/ui (JavaScript mode) · Supabase (PostgreSQL + Auth + RLS) · ts-fsrs · Recharts · react-router-dom · pdf.js + mammoth (material import) · Vercel hosting
+React 19 + Vite 8 · Tailwind CSS v4 (CSS-first, no `tailwind.config.js`) · shadcn/ui (JavaScript mode) + lucide-react icons · sonner toasts · Supabase (PostgreSQL + Auth + RLS) · ts-fsrs · Recharts · react-router-dom · pdf.js + mammoth (material import) · oxlint · Vercel hosting
 
 ## Local setup
 
@@ -160,12 +171,93 @@ No paid services are used anywhere in this project.
 
 ```
 src/
-  pages/        Auth, Dashboard, DeckList, DeckDetail, Review, Upload, Settings, Analytics
+  pages/        Auth, Dashboard, Decks (+ DeckList content), DeckDetail,
+                Review, Upload, Analytics, Settings (+ SettingsPage)
   hooks/        useAuth, useDecks, useCards, useReviews, useAnalytics
-  lib/          supabase client, fsrs wrapper, ai provider chain, error mapping
-  components/   ui/ (shadcn), ErrorBoundary
+  lib/          supabase client, fsrs wrapper, ai provider chain, file
+                extraction, nav/ratings/theme configs, error + auth-form mapping
+  components/   AppShell + nav, review set, upload set, shared states,
+                ui/ (shadcn primitives)
 supabase/
   schema.sql              run in SQL Editor (tables + RLS + hardening)
   migrations/  0001_initial_schema.sql, 0002_authorization_hardening.sql
 vercel.json     production security headers (CSP, clickjacking, …)
 ```
+
+See `PROJECT_CONTEXT.md` for the full annotated tree and routes.
+
+## Design system
+
+- **Tailwind CSS v4, CSS-first** — every color/type/radius token lives in
+  `src/index.css` (`@theme inline` + `:root` / `.dark`, oklch). There is
+  **no `tailwind.config.js`** and none may be added; components use semantic
+  utilities (`bg-primary`, `text-muted-foreground`, `bg-success`, …), never
+  hardcoded colors.
+- **Dark mode** via a `.dark` class on `<html>`, applied before first paint by
+  the external `public/theme-init.js` (external on purpose — the CSP allows no
+  inline scripts), persisted in localStorage with an OS-preference fallback.
+- **Typography:** Inter Variable, fixed 12/14/16/18/24/32/48 px scale.
+- **Motion:** `tw-animate-css` + CSS transitions only (no animation library);
+  a global `prefers-reduced-motion` clamp neutralizes all animation for users
+  who ask for it.
+- **Notifications:** sonner toasts, bottom-center above the mobile nav,
+  styled entirely with design tokens (success for CRUD/save, error for
+  delete failures; validation errors stay inline next to their field).
+
+## Accessibility
+
+Practices in place (each verified in the phase audits, not a formal
+certification): keyboard navigation with visible focus rings on every
+control; semantic HTML landmarks (`nav`/`main`/lists/headings) with a single
+`<h1>` per layout; ARIA labels on icon-only buttons, live regions for review
+announcements, `role="progressbar"`/`aria-busy` where state is shown; form
+labels + `aria-invalid`/`aria-describedby` inline errors; ≥4.5:1 text and
+≥3:1 control-boundary contrast in **both** light and dark themes (contrast
+audited pairwise every UI phase); reduced-motion support; no meaning
+conveyed by color alone; touch targets at or above the project's 30 px floor
+(dialog close and file-browse buttons were raised to it in Phase 13).
+
+## Responsive support
+
+Mobile-first: single `lg` (1024 px) breakpoint switches the bottom tab bar →
+sidebar. Verified from 375 px to 1440 px (including the 639/640, 767/768 and
+1023/1024 edges) in the Phase 13 harness — see `CROSS_BROWSER_QA.md` for the
+exact matrix, tested browsers and what was **not** tested.
+
+## Testing & verification
+
+There is **no automated test runner** in this project (no `npm run test`) —
+verification is lint + build + scripted smoke checks + audits:
+
+| Check | Command / document |
+| --- | --- |
+| Lint | `npm run lint` (oxlint; 1 tolerated pre-existing warning) |
+| Build | `npm run build` |
+| Usability | `USABILITY_AUDIT.md` (18 issues, statuses) |
+| Performance | `PERFORMANCE_AUDIT.md` (Lighthouse lab runs) |
+| Security | `SECURITY_AUDIT.md` + `PRODUCTION_CHECKLIST.md` |
+| Cross-browser / device | `CROSS_BROWSER_QA.md` (179/179 harness checks) |
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| "Could not find the table 'public.decks' in the schema cache" | Run `supabase/schema.sql` in the SQL Editor; confirm `.env`/Vercel vars point at that project; reload the schema cache (Dashboard → Settings → API → Reload schema). |
+| App says "isn't configured yet" | Production build was made without `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` — set them in Vercel and redeploy. |
+| AI generation says rate-limited | Normal on free tiers — add fallback keys (Groq/Cerebras) in Settings, or wait for the quota reset. Gemini-only image import has no fallback. |
+| Supabase project paused | Free tier pauses after ~7 days idle — use the cron ping above. |
+| `.env` changes not picked up | Restart `npm run dev` (Vite reads `.env` at startup). |
+| CSP blocks a new third-party service | Add its origin to `connect-src`/`script-src` in `vercel.json` **before** enabling it. |
+| Import does nothing / errors | Check the file type and size limits (10 MB images, 25 MB documents); scanned PDFs have no text layer — screenshot them and import as an image. |
+
+## Documentation map
+
+| File | Purpose |
+| --- | --- |
+| `README.md` (this file) | setup, deploy, troubleshooting |
+| `DEVELOPER_HANDOFF.md` | fastest on-ramp for a new developer |
+| `PROJECT_CONTEXT.md` | current state, conventions, recovery instructions |
+| `PROJECT_ARCHITECTURE.md` | current architecture summary |
+| `AGENTS.md` / `architecture.md` | canonical long-form: full phase history / full architecture |
+| `USABILITY_AUDIT.md` · `PERFORMANCE_AUDIT.md` · `SECURITY_AUDIT.md` · `CROSS_BROWSER_QA.md` | evidence-backed audits (statuses per finding) |
+| `PRODUCTION_CHECKLIST.md` | deploy gates — only verified items are checked |

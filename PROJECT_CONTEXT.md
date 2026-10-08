@@ -1,12 +1,14 @@
-# PROJECT_CONTEXT.md — FastRev
+# PROJECT_CONTEXT.md — FastRev (Student Review System)
 
-Fast on-ramp for (re)discovering this project. Full phase history, key decisions and
-risks live in `AGENTS.md`; full architecture reference lives in `architecture.md`.
-This file documents the current state only.
+Fast on-ramp for (re)discovering this project — the file to read **first** in any
+new OpenCode session. Full phase history, key decisions and risks live in
+`AGENTS.md`; full architecture reference lives in `architecture.md`; the fastest
+handoff summary lives in `DEVELOPER_HANDOFF.md`. This file documents the current
+state only.
 
-## What the app is
+## 1. Project overview
 
-FastRev — a free-tier spaced-repetition flashcard web app for students.
+**FastRev** — a free-tier spaced-repetition flashcard web app for students.
 
 - Students keep **decks of Q/A cards**, scheduled by **FSRS** (ts-fsrs).
 - Cards can be **AI-generated** from pasted notes or imported material (PDF /
@@ -17,75 +19,85 @@ FastRev — a free-tier spaced-repetition flashcard web app for students.
   RLS. Hosted on **Vercel** static hosting.
 - Hard constraint: **zero monetary cost** (free tiers only; no paid services).
 
-## Current phase
+**Target users:** individual students studying with their own material
+(single-user-per-account; no sharing/collaboration features).
 
-**Phase 14 — not yet defined.**
-Phases 0–6 are complete: project setup, Supabase schema/auth, deck CRUD, review +
-FSRS, AI generation, analytics + docs, schema repair, material import, and UI/UX
-plan Phases 1–8 (design system, app shell, dashboard/decks, review focus mode,
-upload, analytics, authentication, interaction/motion/feedback). **App-wide Final
-QA & Polish (audit & fix pass) completed 2026-10-06** — control-boundary contrast
-(`--input`), type-scale fixes, dead `tabs.jsx` removed, ARIA/landmark gap-fills,
-icon-size + error-tint consistency, chart text alternatives; no functionality
-changed. **UI/UX Phase 10 — Usability Audit & targeted fixes completed
-2026-10-06**: `USABILITY_AUDIT.md` (Flows A–F, 18 issues) + fixes — double-save
-guard on Upload, whitespace validation on deck/card forms, `/upload?deck=` deep
-link from DeckDetail, Add Card dialog stays open for batch entry, delete confirms
-now solid `danger`, decks-error retry, label/due-count/copy polish. Deck **rename
-still has no UI** (documented as U-08, needs a shared decks context).
-**Phase 11 — Performance Audit & Optimization completed 2026-10-06**:
-`PERFORMANCE_AUDIT.md` — real Lighthouse lab runs (mobile, throttled) went
-**88/98/100/82 → 94/100/100/100** (perf/a11y/BP/SEO); initial JS chunk
-**1,150.61 kB → 657.37 kB** (gzip 335 → 192 kB) via React.lazy route splitting
-(recharts now rides the Analytics chunk), `useDecks` in-flight request dedupe,
-meta description + `public/robots.txt`, `<main>` landmarks on the auth/loading
-screens. **Phase 12 — Security & Production Readiness completed 2026-10-06**:
-`SECURITY_AUDIT.md` (findings SEC-01…SEC-26) + `PRODUCTION_CHECKLIST.md`
-(verified-only boxes) — security headers + CSP in `vercel.json` (theme bootstrap
-moved to `public/theme-init.js`, no `unsafe-inline`), safe errors via
-`src/lib/errors.js` (raw detail dev-only), `maxLength` validation on every text
-field + notes 60k cap, upload 10 MB/25 MB size guards, AI output caps (40 cards),
-enumeration-safe signup copy, fail-safe config screen when env vars are missing,
-and DB hardening SQL (ownership triggers + length CHECKs in
-`supabase/migrations/0002_authorization_hardening.sql` — **written, not yet
-executed**). Verified here: lint · build · 56/56 security smoke · dist + git
-secret scans clean · local server + headless Chrome (headers on the wire, full
-Auth screen under CSP with zero violations, inline-script probe blocked). **Outstanding
-(user steps):** run the 0002 SQL + verify live RLS, confirm Vercel env vars, check
-headers on the deployed URL. See `AGENTS.md` → Completed Phases +
-`architecture.md` → § Security & Production Readiness (Phase 12).
-**Phase 13 — Cross-Browser & Device QA completed 2026-10-07**:
-`CROSS_BROWSER_QA.md` (method, environment/responsive/browser-compat tables,
-issues **CB-01…CB-07**) — evidence came from a temp-dir headless-Chrome CDP
-harness running the production build with the real `vercel.json` headers and a
-mocked backend: **179/179 checks, 0 console errors**, 10 scenarios × 12 widths
-(375…1440 incl. 639/640, 767/768, 1023/1024 edges) + dark/reduced-motion +
-36 screenshots. App fixes: DeckDetail long-text containment (240-char unbroken
-token no longer overflows at 375/1440) + header long-name wrapping; inline edit
-focus (question textarea on Edit, Edit-button refocus on Cancel/save); MobileMenu
-close now returns focus to the hamburger; dialog close 28→32 px; Upload
-"Browse files" 28→36 px (30 px project floor). Documented-only: `handleRating`
-has no try/finally (CB-07, unreachable in production), compact touch targets
-kept, Firefox/Safari/physical devices Not Tested. Harness lessons (PostgREST
-`.single()` replies, ts-fsrs state 0–3, provider CORS preflight) are recorded in
-`AGENTS.md` → Key Decisions § Phase 13.
+## 2. Current phase
 
-## Tech stack (locked)
+**Phase 14 — Final Documentation & Developer Handoff — complete (2026-10-08).**
 
-| Layer      | Choice                                                            |
-| ---------- | ----------------------------------------------------------------- |
-| Frontend   | React 19 + Vite 8, **JavaScript/JSX only** (no TypeScript)         |
-| Styling    | Tailwind CSS v4, CSS-first — **no `tailwind.config.js`**, tokens in `src/index.css` |
-| UI kit     | shadcn/ui (JavaScript mode) + `radix-ui` monolith + `lucide-react` |
-| Backend    | Supabase (PostgreSQL + Auth + RLS)                                 |
-| Scheduling | ts-fsrs (FSRS algorithm)                                           |
-| Routing    | react-router-dom v7                                                |
-| Charts     | recharts                                                           |
-| Toasts     | sonner (Phase 8; framer-motion deliberately **not** added)         |
-| Tooling    | npm, oxlint (`npm run lint`), Vite build                           |
-| Hosting    | Vercel (static)                                                    |
+Phases 0–13 are complete (project setup · Supabase schema/auth · deck CRUD ·
+review + FSRS · AI generation · analytics · material import · UI/UX plan
+Phases 1–8 · Final QA & Polish · Phase 10 usability audit · Phase 11 performance
+audit · Phase 12 security · Phase 13 cross-browser/device QA). Phase 14
+reviewed every doc against the actual source, corrected stale claims, and
+produced `DEVELOPER_HANDOFF.md`.
 
-## Project structure
+Documented status of every audit:
+
+| Deliverable | Status |
+| --- | --- |
+| `USABILITY_AUDIT.md` (Phase 10) | 18 issues — 13 Fixed (U-18 closed by Phase 12), **5 Not Fixed: U-08 (deck rename UI) + U-14…U-17** |
+| `PERFORMANCE_AUDIT.md` (Phase 11) | Lighthouse (lab) 88/98/100/82 → **94/100/100/100**; initial chunk 1,150.61 → 657.37 kB |
+| `SECURITY_AUDIT.md` (Phase 12) | SEC-01…SEC-26 — no Critical; **SEC-05 (live RLS verification) still open** |
+| `CROSS_BROWSER_QA.md` (Phase 13) | **179/179 checks** (headless Chrome, mocked backend); Firefox/WebKit/physical devices NOT tested |
+| `PRODUCTION_CHECKLIST.md` | verified-only boxes — live-deploy steps remain unchecked for the user |
+
+**Outstanding before production (user steps):** run
+`supabase/migrations/0002_authorization_hardening.sql` + verify live RLS
+(SEC-05), confirm Vercel env vars exist at build time, live smoke of auth +
+review + AI generation, confirm security headers on the deployed URL.
+
+## 3. Technology stack (locked)
+
+| Layer | Choice |
+| --- | --- |
+| Frontend | React 19 + Vite 8, **JavaScript/JSX only** (no TypeScript) |
+| Styling | Tailwind CSS v4, CSS-first — **no `tailwind.config.js`**, tokens in `src/index.css` |
+| UI kit | shadcn/ui (JavaScript mode) + `radix-ui` monolith + `lucide-react` v1.52 + `cn` (class merge) |
+| Backend | Supabase (PostgreSQL + Auth + RLS) |
+| Scheduling | ts-fsrs (FSRS algorithm) |
+| Routing | react-router-dom v7 |
+| Charts | recharts (lazy Analytics chunk only) |
+| Toasts | sonner (Phase 8; framer-motion deliberately **not** added) |
+| Material import | pdfjs-dist (legacy build, local) · mammoth (local) · Gemini vision OCR (images) |
+| Font | Inter Variable (`@fontsource-variable/inter`) |
+| Animation | tw-animate-css + CSS transitions + global reduced-motion clamp |
+| Tooling | npm, oxlint (`npm run lint`), Vite build — **no test runner, no typechecker** |
+| Hosting | Vercel (static; security headers from `vercel.json`) |
+
+## 4. Application features
+
+All implemented unless marked otherwise:
+
+- **Authentication** — email/password sign-up/sign-in via Supabase Auth
+  (email confirmation ON by default → confirmation panel), sign-out from the
+  UserMenu. *Not implemented by design:* password reset, OAuth, remember-me,
+  profile editing.
+- **Dashboard** — adaptive hero (Start Review / caught-up), 4 stat cards
+  (Due Today, Streak, Total Cards, Retention), top-3 priority decks, empty state.
+- **Deck management** — create (`CreateDeckDialog`), delete (confirmed), browse
+  (`/decks` grid + priority section on Dashboard). **No rename UI** (hook
+  `updateDeck` exists but is unused — U-08, needs a shared decks context).
+- **Card management** — add cards (dialog stays open for batch entry), inline
+  edit, delete with confirmation, per-deck due counts.
+- **Review system** — one card at a time, Show Answer, Again/Hard/Good/Easy
+  (keys 1–4, Space reveals), FSRS scheduling, progress bar, keyboard focus
+  management, completion screen; empty queue → Generate cards CTA.
+- **Upload + AI generation** — two-panel workspace: deck picker, notes
+  textarea (60k cap), file import (PDF/images/.docx/.txt/.md, drag-and-drop),
+  Generate via Gemini → Groq → Cerebras chain, editable/selectable preview
+  rows, Save All / Save Selected, `/upload?deck=<id>` deep link.
+- **Analytics** — retention, total reviews, streak, cards learned, highlights,
+  week-over-week trend, 7-day due forecast bar chart, 14-day activity line
+  chart, rating-breakdown meter, weakest-decks bars; no-history/empty states.
+- **Settings** — `/settings` route (and dialog on Upload) storing AI keys in
+  localStorage only.
+- **Platform polish** — dark mode (`.dark`, pre-paint bootstrap), toasts
+  (sonner), loading skeletons everywhere, global error boundary, responsive
+  layout (mobile bottom nav → desktop sidebar at `lg`), focus-mode review route.
+
+## 5. Project structure
 
 ```
 FastRev/
@@ -93,11 +105,13 @@ FastRev/
 ├── architecture.md              # full architecture reference
 ├── PROJECT_CONTEXT.md           # this file — current-state on-ramp
 ├── PROJECT_ARCHITECTURE.md      # current-state architecture summary
+├── DEVELOPER_HANDOFF.md         # fastest on-ramp for a new developer
+├── README.md                    # setup: Supabase, AI keys, cron, Vercel deploy
+├── PRODUCTION_CHECKLIST.md      # deploy checklist (verified-only boxes)
 ├── USABILITY_AUDIT.md           # Phase 10 audit: Flows A–F, 18 issues + statuses
 ├── PERFORMANCE_AUDIT.md         # Phase 11 perf audit: baseline → Lighthouse 94/100/100/100
 ├── SECURITY_AUDIT.md            # Phase 12 security audit: SEC-01…SEC-26 + tests
-├── PRODUCTION_CHECKLIST.md      # Phase 12 deploy checklist (verified-only boxes)
-├── README.md                    # setup: Supabase, AI keys, cron, Vercel deploy
+├── CROSS_BROWSER_QA.md          # Phase 13 device QA: CB-01…CB-07, 179/179 checks
 ├── vercel.json                  # security headers + CSP for every response (Phase 12)
 ├── index.html                   # entry; loads /theme-init.js (external pre-paint theme bootstrap)
 ├── vite.config.js               # react + tailwindcss plugins, @ alias (JS, not .ts)
@@ -122,13 +136,13 @@ FastRev/
     │   ├── Breadcrumbs.jsx, StatCard.jsx, DeckCard.jsx, CreateDeckDialog.jsx
     │   ├── EmptyState.jsx, ErrorState.jsx, ErrorBoundary.jsx, ThemeToggle.jsx
     │   ├── LoadingButton.jsx     # shared async submit (spinner + aria-busy)
-│   │   RouteFallback.jsx     # Suspense fallback for lazy routes (Phase 11)
+    │   ├── RouteFallback.jsx     # Suspense fallback for lazy routes (Phase 11)
     │   ├── ReviewShell.jsx, ReviewProgress.jsx, Flashcard.jsx,
     │   │   RatingButtons.jsx, ShortcutHint.jsx          # review focus mode
     │   ├── GeneratedCard.jsx, GenerationSkeleton.jsx    # upload preview
-    │   └── ui/                  # shadcn components (button, card, input, dialog,
-    │                            #   alert-dialog, textarea, checkbox, badge,
-    │                            #   skeleton, dropdown-menu)
+    │   └── ui/                  # shadcn components (alert-dialog, badge, button,
+    │                            #   card, checkbox, dialog, dropdown-menu, input,
+    │                            #   skeleton, textarea — tabs.jsx deleted, dead)
     ├── hooks/
     │   ├── useAuth.js           # AuthProvider + useAuth (signIn/signUp/signOut)
     │   ├── useDecks.js, useCards.js, useReviews.js, useAnalytics.js
@@ -142,32 +156,41 @@ FastRev/
     │   ├── theme.js             # dark-mode read/apply/toggle/subscribe
     │   ├── authForm.js          # auth validation + Supabase error → friendly copy
     │   ├── errors.js            # friendlyDbError: raw DB error → safe copy at render
-    │   └── utils.js             # cn()
+    │   └── utils.js             # cn() re-export (shadcn `cn` package)
     └── pages/
         ├── Auth.jsx             # login/signup — Phase 7 screen (AuthView + state)
-        ├── Dashboard.jsx, Decks.jsx, DeckDetail.jsx, Review.jsx,
-        ├── Upload.jsx, Analytics.jsx, Settings.jsx, SettingsPage.jsx
+        ├── Dashboard.jsx        # /dashboard
+        ├── Decks.jsx            # /decks route wrapper → DeckList
+        ├── DeckList.jsx         # deck grid content (not a route itself)
+        ├── DeckDetail.jsx       # /decks/:id
+        ├── Review.jsx           # /review (focus mode)
+        ├── Upload.jsx           # /upload
+        ├── Analytics.jsx        # /analytics
+        ├── Settings.jsx         # SettingsDialog + SettingsForm
+        └── SettingsPage.jsx     # /settings route wrapper
 ```
 
-## Routes
+## 6. Routes
 
-| Path          | Guard              | Layout                        |
-| ------------- | ------------------ | ----------------------------- |
-| `/auth`       | guest-only         | full-screen card (no shell)   |
-| `/dashboard`  | protected          | AppShell                      |
-| `/decks`      | protected          | AppShell                      |
-| `/decks/:id`  | protected          | AppShell                      |
-| `/upload`     | protected          | AppShell                      |
-| `/analytics`  | protected          | AppShell                      |
-| `/settings`   | protected          | AppShell                      |
-| `/review`     | protected          | **focus mode** (sibling of AppShell — no chrome) |
-| `/`           | —                  | redirect → `/dashboard`       |
-| `*`           | —                  | redirect → `/`                |
+| Path | Guard | Layout | Loading |
+| --- | --- | --- | --- |
+| `/auth` | guest-only | full-screen card (no shell) | eager |
+| `/dashboard` | protected | AppShell | eager |
+| `/decks` | protected | AppShell | lazy |
+| `/decks/:id` | protected | AppShell | lazy |
+| `/upload` | protected | AppShell | lazy |
+| `/analytics` | protected | AppShell | lazy (keeps recharts off first paint) |
+| `/settings` | protected | AppShell | lazy |
+| `/review` | protected | **focus mode** (sibling of AppShell — no chrome) | lazy + own Suspense |
+| `/` | — | redirect → `/dashboard` | — |
+| `*` | — | redirect → `/` | — |
 
 `ProtectedLayout` shows "Loading…" while auth resolves, then redirects
-unauthenticated users to `/auth`. `GuestRoute` mirrors it (signed-in → `/dashboard`).
+unauthenticated users to `/auth`. `GuestRoute` mirrors it (signed-in →
+`/dashboard`). Production builds with missing env vars show the
+"isn't configured yet" screen instead of a broken app.
 
-## Auth flow (current)
+## 7. Auth flow (current)
 
 1. `src/lib/supabase.js` creates the client from `VITE_SUPABASE_URL` /
    `VITE_SUPABASE_ANON_KEY` (falls back to placeholders + console.warn if unset).
@@ -193,7 +216,7 @@ unauthenticated users to `/auth`. `GuestRoute` mirrors it (signed-in → `/dashb
 **Not implemented (do not add without being asked):** password reset,
 Google/social OAuth, remember-me, profile editing.
 
-## Design-system essentials
+## 8. Design-system essentials
 
 - **All tokens live in `src/index.css`** (`@theme inline` + `:root` / `.dark`,
   oklch). Never hardcode hex/oklch in components; no `tailwind.config.js`.
@@ -204,7 +227,7 @@ Google/social OAuth, remember-me, profile editing.
 - **Warning-as-text rule:** warning-colored text on a tint uses
   `text-warning-foreground dark:text-warning` (light `--warning` fill is only 2.9:1 as text).
 - Type scale: 12/14/16/18/24/32/48 (`text-xs` … `text-3xl`). Weights: 400 body,
-  500/600 headings/actions. Font: Inter Variable.
+  500/600 headings/actions. Font: Inter Variable. Floor is 12 px — no smaller.
 - Radius: base `0.75rem`, multipliers (`rounded-lg` cards, `rounded-xl` dialogs…).
 - **Control boundaries:** `--border` is the 1 px structural hairline (~1.3:1, by
   design); `--input` draws input/textarea/select/outline-button edges and is
@@ -230,30 +253,11 @@ Google/social OAuth, remember-me, profile editing.
   ring on every control, icon-only buttons carry `aria-label`, decorative icons
   `aria-hidden`, never state-by-color-alone.
 
-## Commands
-
-```bash
-npm run dev      # Vite dev server on :5173
-npm run build    # production build (must pass before finishing a phase)
-npm run lint     # oxlint — only the 1 pre-existing warning allowed (button.jsx fast-refresh)
-npm run preview  # serve the production build
-```
-
-Validation recipe used by every UI phase (run before reporting done):
-lint → build → SSR render smoke via temp `ssr-smoke.mjs` (Vite `ssrLoadModule` +
-`renderToString` + check assertions) → contrast audit via temp `contrast-audit.mjs`
-(oklch → WCAG ratio; ≥4.5 text / ≥3 UI, light + dark) → dev-server route/module
-HTTP 200s → built-CSS contains new utilities → delete temp scripts.
-Latest run (Phase 12 — security): lint 1 warning · build ✓ · **56/56 security
-smoke** (error-mapping + auth-copy units, renders, CSP/SQL/source assertions) ·
-dist + git-history secret scans clean · local server + headless Chrome: headers
-on the wire, full Auth screen under CSP with **zero violations**, inline-script
-probe **blocked**, missing-env production guard shown · `npm audit` recorded in
-`SECURITY_AUDIT.md`. (Phase 11's Lighthouse after-run: **94 / 100 / 100 / 100**.)
-
-## Conventions worth knowing
+## 9. Important rules (project conventions)
 
 - JSX only in `.jsx`; hooks/libs are `.js` (Vite 8 won't parse JSX in `.js`).
+- Tailwind v4 CSS-first: **never create `tailwind.config.js`**; tokens only in
+  `src/index.css`; semantic utilities in components, never hardcoded colors.
 - Data-fetch functions use `.then()` callbacks (oxlint `set-state-in-effect`);
   mutations are async/await (event handlers only). Hooks return
   `{ data }`/`{ error }` and mirror `loading`/`error`.
@@ -265,9 +269,17 @@ probe **blocked**, missing-env production guard shown · `npm audit` recorded in
 - Toasts: call sites import `{ toast } from 'sonner'` directly (no wrapper);
   `LoaderCircle` is the only spinner in the app; Auth keeps its own inline
   loading pattern (do not "convert" it — Phase 7 smoke asserts that markup).
+- Focus mode = routing, not flags: a route that must hide the shell is a
+  **sibling of `<AppShell>`** inside `ProtectedLayout` (only `/review` today).
+- Navigation single source: `src/lib/nav.js` — a new destination = one
+  `NAV_ITEMS` entry + one route in `App.jsx`.
+- No backend invention: there is no application server, no first-party API
+  routes, no server actions. All writes go through Supabase REST with RLS.
+- Never fabricate data: stats, counts, forecasts and tallies come from real
+  queries; empty/loading/error states show `—` or explanatory copy instead.
 - Docs convention: `AGENTS.md` + `architecture.md` are the canonical long-form
-  docs (updated every phase); this file + `PROJECT_ARCHITECTURE.md` are the
-  current-state summaries.
+  docs; this file + `PROJECT_ARCHITECTURE.md` are the current-state summaries;
+  `DEVELOPER_HANDOFF.md` is the fast on-ramp. Update docs when architecture changes.
 - Performance conventions (Phase 11): routes are code-split with `React.lazy`
   (`App.jsx`) — **only AppShell/Auth/Dashboard stay eager**; a new heavy page
   must be lazy too. Suspense for shell routes lives **inside AppShell's outlet**
@@ -288,3 +300,70 @@ probe **blocked**, missing-env production guard shown · `npm audit` recorded in
   `.env.example`, real values never committed. Verification + open items live in
   `SECURITY_AUDIT.md` / `PRODUCTION_CHECKLIST.md` — never claim live-deploy
   verification that wasn't performed.
+
+## 10. Development principles
+
+1. **Preserve existing functionality.** This is a finished app — changes are
+   additive or corrective, never rewrites.
+2. **Read before writing.** The source is the source of truth; docs may lag,
+   code does not. If they conflict, fix the docs.
+3. **Reuse before creating.** `StatCard`, `DeckCard`, `EmptyState`,
+   `ErrorState`, `LoadingButton`, `CreateDeckDialog`, skeletons and the `ui/`
+   primitives exist for a reason — no duplicate components.
+4. **Do not invent backend functionality** (no new endpoints, RPCs, or tables
+   unless the task explicitly asks) **and do not fabricate data.**
+5. **Maintain accessibility** — contrast, focus, ARIA roles/labels, semantic
+   HTML, reduced motion. Never regress a verified contrast pair.
+6. **Responsive** at 375 px and 1440 px minimum; the single nav breakpoint is `lg`.
+7. **Test before declaring done:** `npm run lint` + `npm run build` at minimum;
+   use the validation recipe below for anything user-visible.
+8. **Update documentation** whenever architecture, routes, commands, env vars
+   or conventions change.
+
+## 11. Commands
+
+```bash
+npm run dev      # Vite dev server on :5173
+npm run build    # production build (must pass before finishing a phase)
+npm run lint     # oxlint — only the 1 pre-existing warning allowed (button.jsx fast-refresh)
+npm run preview  # serve the production build (no vercel.json headers)
+```
+
+There is **no** test runner and **no** typechecker (JavaScript project) —
+`npm run test` / `npm run typecheck` do not exist and must not be documented.
+
+Validation recipe used by every UI phase (run before reporting done):
+lint → build → SSR render smoke via temp `ssr-smoke.mjs` (Vite `ssrLoadModule` +
+`renderToString` + check assertions) → contrast audit via temp `contrast-audit.mjs`
+(oklch → WCAG ratio; ≥4.5 text / ≥3 UI, light + dark) → dev-server route/module
+HTTP 200s → built-CSS contains new utilities → delete temp scripts.
+
+Latest run (**Phase 14 — documentation**): lint 1 warning · production build ✓ ·
+dev-server smoke of all 10 routes + module transforms HTTP 200 · documentation
+consistency pass across `PROJECT_CONTEXT.md`, `PROJECT_ARCHITECTURE.md`,
+`README.md`, `DEVELOPER_HANDOFF.md`, `PRODUCTION_CHECKLIST.md` and the four
+audit files. Prior validation evidence lives in each audit file
+(`CROSS_BROWSER_QA.md` = 179/179 harness checks; `SECURITY_AUDIT.md` = 56/56
+smoke + header/CSP proof; `PERFORMANCE_AUDIT.md` = Lighthouse 94/100/100/100).
+
+## 12. OpenCode recovery instructions
+
+If the OpenCode session or Windows environment resets, before making **any**
+change:
+
+```text
+1. Scan PROJECT_CONTEXT.md.            (this file — current state)
+2. Scan PROJECT_ARCHITECTURE.md.       (current architecture)
+3. Read the relevant audit/documentation file for the area
+   (USABILITY_AUDIT / PERFORMANCE_AUDIT / SECURITY_AUDIT /
+    CROSS_BROWSER_QA / PRODUCTION_CHECKLIST / README).
+4. Inspect the relevant source files.  (code is the source of truth)
+5. Understand the existing implementation.
+6. Make the smallest appropriate change.
+7. Test the change: npm run lint && npm run build (+ dev smoke if visible).
+8. Update documentation when architecture or behavior changed.
+```
+
+Never recreate existing architecture without checking the source first, and
+never reintroduce a removed dependency (`framer-motion`, `tailwind.config.js`,
+`ui/tabs.jsx`, `npx shadcn`) that earlier phases deliberately removed.

@@ -334,7 +334,7 @@ App-wide audit-and-fix pass over everything shipped in UI/UX Phases 1–8: desig
 `npm run lint` → **1 warning only** (pre-existing `button.jsx` fast-refresh) → `npm run build` ✓ (main 1,148.26 kB / CSS 63.23 kB, known 500 kB chunk warning) → **49/49 SSR smoke** (every page loading/empty/error state, AuthView ×7, LoadingButton, Toaster, chart aria-labels, `<ul>`/roles, `ui/tabs.jsx` confirmed gone) → **84-pair contrast audit: 0 failures / 2 documented INFO** (`--border` 1.29:1 light / 1.42:1 dark) in light AND dark → 9 routes + 13 module transforms HTTP 200 on the dev server → built CSS contains every new utility (`size-3.5`, `md:text-sm`, `bg-destructive/5`, …) → temp scripts deleted. **Not interactively browser-tested** (no browser tool) — see AGENTS.md Known Risks for the manual pass list.
 
 ## Usability Audit (Phase 10)
-A read-only inspection of the real code (no assumption from phase docs) covering user **Flows A–F** (sign up/login, dashboard, deck create/delete, card create/edit, AI generation + save, review incl. empty queue/failures), Nielsen's 10 heuristics, and a cross-cutting pass over labels, navigation, validation and failure recovery. Output: **`USABILITY_AUDIT.md`** — 18 issues (0 Critical · 1 High · 7 Medium · 6 Low · 4 Info; **12 Fixed**, 6 Not Fixed — U-08 deferred, U-14…U-18 documented), each with severity, page, problem, user impact, recommendation, and a final Fixed / Partially Fixed / Not Fixed status.
+A read-only inspection of the real code (no assumption from phase docs) covering user **Flows A–F** (sign up/login, dashboard, deck create/delete, card create/edit, AI generation + save, review incl. empty queue/failures), Nielsen's 10 heuristics, and a cross-cutting pass over labels, navigation, validation and failure recovery. Output: **`USABILITY_AUDIT.md`** — 18 issues (0 Critical · 1 High · 7 Medium · 6 Low · 4 Info; **13 Fixed**, 5 Not Fixed — U-08 + U-14…U-17 documented; U-18 was closed later by Phase 12's error-safety work), each with severity, page, problem, user impact, recommendation, and a final Fixed / Partially Fixed / Not Fixed status.
 
 ### What changed (targeted fixes only — no redesign)
 - **U-01 (High) Upload double-save** — `handleSave` now guards `if (!deck || saving) return`; `saving` stays `true` on success (held through the 1-second redirect) and is only cleared on failure, so a second click can never duplicate cards; Save buttons are `disabled={!deck || …}` (a stale/unresolvable `?deck=` id can no longer FK-fail silently).
@@ -349,8 +349,12 @@ A read-only inspection of the real code (no assumption from phase docs) covering
 - **U-13 welcome heading** — Dashboard greeting gets `break-words` so long names/emails wrap instead of overflowing 375 px.
 
 ### Deliberately not fixed (documented in the audit)
-- **U-08 Deck rename has no UI** — `updateDeck` exists but no surface calls it; adding it properly needs a shared decks context (every `useDecks` consumer would otherwise show stale names). Needs its own small phase.
-- **U-14…U-18** — README still says the old "New Deck" wording claim / no offline queue / no password reset / 1000-row analytics cap / localStorage key exposure are all accepted free-tier scope decisions carried forward as Known Risks.
+- **U-08 Deck rename has no UI** — `updateDeck` exists but no surface calls it; adding it properly needs a shared decks context (every `useDecks` consumer would otherwise show stale names). Needs its own small phase. **Phase 14 removed the false README claim**, so docs now match the code; the feature itself is still unbuilt.
+- **U-14 nav label** — "Upload" (nav) vs "Generate Cards" (in-page) kept: both are accurate and consistent within their contexts.
+- **U-15 no undo for a mis-rating** — reverting would need FSRS log-rollback semantics the schema doesn't support; not faked.
+- **U-16 notes/rows lost on navigation** — no draft-persistence layer; adding one is a new feature with its own failure modes.
+- **U-17 no password reset / OAuth / remember-me** — `useAuth` exposes only signIn/signUp/signOut; documented absence rather than a fake flow.
+- **U-18 raw mutation errors** — *fixed later by Phase 12*: every deck/card mutation render point now maps through `friendlyDbError`, raw text is dev-only.
 
 ### Verification (Phase 10)
 `npm run lint` → **1 warning only** (pre-existing `button.jsx` fast-refresh) → `npm run build` ✓ (main ≈1,150.6 kB / CSS ≈63.44 kB, known 500 kB chunk warning) → **49/49 SSR smoke** (Upload preselect probe via `useSearchParams` + source assertions, save-guard source assertions, CreateDeckDialog/DeckDetail validation strings, empty-queue Generate button, danger-variant confirms, all regression states) → **102-contrast-check audit: 0 failures / 6 documented INFO** (the `--border` hairline in both themes; tint fills/skeletons excluded as non-boundaries) — includes the new solid `danger` dialog-footer pair → 9 routes + 8 module transforms HTTP 200 → built CSS contains every touched utility (`break-words`, `underline-offset-4`, `bg-danger`, `bg-destructive/10`, …) → temp scripts deleted. **Not interactively browser-tested** (no browser tool) — manual pass list in AGENTS.md Known Risks.
@@ -504,6 +508,52 @@ widths, 36 screenshots) · final `npm run build` **without** env vars (0
 **Not covered:** Firefox/WebKit/physical devices, live Supabase sessions, real
 AI-provider endpoints (Groq/Cerebras CORS), real screen readers — see
 `CROSS_BROWSER_QA.md` § Remaining Issues.
+
+## Final Documentation & Developer Handoff (Phase 14)
+
+Documentation-only close-out of the project (strict boundary: no application
+code changed; the only non-document edits were status corrections inside audit
+files that the source had outgrown).
+
+- **New `DEVELOPER_HANDOFF.md`** — the fastest on-ramp: what the project is,
+  current status (done vs. pending), tech stack, exact run commands, important
+  files, short architecture, database, auth, UI system, development rules,
+  confirmed known issues, reasonable future improvements, and OpenCode recovery
+  steps.
+- **`PROJECT_CONTEXT.md` finalized** — project overview + feature inventory +
+  explicit rules + development principles + OpenCode recovery instructions;
+  file tree corrected (was missing `DEVELOPER_HANDOFF.md`, `CROSS_BROWSER_QA.md`
+  and `src/pages/DeckList.jsx`).
+- **`PROJECT_ARCHITECTURE.md` finalized** — added § Folder structure and
+  § API architecture (the zero-first-party-endpoint surface: Supabase
+  PostgREST/Auth + the three AI providers, with auth and response shapes);
+  sections renumbered 1–14; stale `Gemini 2.5 Flash` reference replaced with
+  the pinned model IDs actually in `ai.js`; `cn` described accurately (the
+  shadcn `cn` package, not tailwind-merge itself).
+- **`README.md` finalized** — gained Overview / Design system / Accessibility /
+  Responsive support / Testing & verification / Troubleshooting / Documentation
+  map; **removed the "rename decks" claim** (U-08's reserved follow-up option —
+  the rename UI does not exist, so the docs no longer promise it); project
+  structure tree corrected to the real page files.
+- **`PRODUCTION_CHECKLIST.md` restructured** — Environment / Authentication /
+  Database / API / AI-Uploads / UI-UX / Performance / Security / QA /
+  Deployment; Phase 13 harness evidence now backs the responsive, dark-mode,
+  keyboard and a11y boxes (with the method noted on each); every live-deploy
+  item remains unchecked with its exact step.
+- **Corrected stale documentation** — `USABILITY_AUDIT.md` U-18 (raw mutation
+  errors) re-statused **Fixed by Phase 12** (verified in `CreateDeckDialog`,
+  `DeckDetail`, `Upload` source) → 13 Fixed / 5 Not Fixed; `architecture.md`
+  § Usability Audit's U-14…U-18 blurbs rewritten to the five findings that
+  actually exist.
+- **Consistency sweep** — every documented file reference resolves; commands
+  across README/handoff map 1:1 to `package.json` (`dev`, `build`, `lint`,
+  `preview` — the docs now explicitly state no test/typecheck scripts exist);
+  routes, env vars, tables, dependencies and pinned model IDs agree across all
+  six primary docs.
+
+**Validation:** oxlint 1 warning (tolerated `button.jsx` fast-refresh) ·
+production build ✓ · dev-server smoke (all 10 routes + module transforms
+HTTP 200) · file-reference and cross-document consistency checks green.
 
 ## Database Schema (Supabase)
 - `decks` (id, user_id, name, description, created_at)

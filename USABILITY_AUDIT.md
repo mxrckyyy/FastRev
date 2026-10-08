@@ -18,7 +18,9 @@
 | **Info / Not Fixed** | Documented limitation or deliberate design decision (rationale required). |
 
 **Result: 18 issues — 0 Critical · 1 High · 7 Medium · 6 Low · 4 Info.**
-**Statuses: 12 Fixed (U-01…U-07, U-09…U-13) · 6 Not Fixed** (U-08 deferred + U-14…U-18 documented).
+**Statuses: 13 Fixed (U-01…U-07, U-09…U-13, U-18) · 5 Not Fixed** (U-08 + U-14…U-17 documented).
+*(Phase 14 note: U-18 was closed later by Phase 12's error-safety work; U-08's
+README claim was removed in Phase 14 — the rename UI itself is still not built.)*
 
 ---
 
@@ -27,7 +29,7 @@
 | # | Flow | Verdict | Issues raised |
 | --- | --- | --- | --- |
 | A | First-time user (sign up → first useful screen) | **Pass** | None blocking: empty Dashboard offers Create Deck as the correct first step; Upload states exactly what's missing ("No API key yet — open Settings", "No decks yet — create one first"); email-confirmation path is explained. |
-| B | Create deck | **Pass after fixes** | U-02 (empty deck name from whitespace), U-09 (two names for one action), U-08 (rename advertised but missing → Not Fixed). |
+| B | Create deck | **Pass after fixes** | U-02 (empty deck name from whitespace), U-09 (two names for one action), U-08 (rename advertised but missing → README claim removed in Phase 14; rename UI still Not Fixed). |
 | C | Add cards (manual + AI) | **Pass after fixes** | U-04 (no contextual path from a deck to AI generation), U-03 (empty card from whitespace), U-05 (dialog closes after every card). |
 | D | Review session | **Pass after fixes** | U-12 (empty queue dead-ends on one button), U-15 (no undo for a mis-rating → Not Fixed, architecture). Existing: keyboard shortcuts, live-region announcements, retry on failed rating. |
 | E | Error & recovery | **Pass after fixes** | U-01 (double-save duplicates cards), U-06 (deck-load failure has no alert role/retry). Existing: generation/import/save failures all have friendly copy + actions, partial saves keep unsaved rows, deletes confirm + toast. |
@@ -87,7 +89,7 @@
 - **Problem:** README features say "create, **rename**, and delete decks" and `useDecks.updateDeck` is fully implemented — but no component calls it. There is no rename/edit affordance anywhere (DeckDetail header has only Add Card; DeckCard has Open/Delete).
 - **User impact:** a user who typo'd a deck name has no way to fix it despite the docs promising one; Flow B dead-ends after creation.
 - **Recommendation:** build an "Edit deck" dialog on DeckDetail calling `updateDeck`.
-- **Status: Not Fixed (this phase).** Reason: doing it correctly requires shared decks state — `AppShell` owns a *separate* `useDecks()` instance for the breadcrumb, so a rename from DeckDetail would leave the breadcrumb showing the old name until a full reload; wiring a decks context is a feature/refactor, outside this phase's "targeted fixes, no new features" scope. **Follow-up for the next phase:** either build rename with a shared decks context, or drop the claim from README (README left unchanged so the next phase owns the decision).
+- **Status: Not Fixed (rename UI).** Reason: doing it correctly requires shared decks state — `AppShell` owns a *separate* `useDecks()` instance for the breadcrumb, so a rename from DeckDetail would leave the breadcrumb showing the old name until a full reload; wiring a decks context is a feature/refactor, outside this phase's "targeted fixes, no new features" scope. **Follow-up for the next phase:** either build rename with a shared decks context, or drop the claim from README (README left unchanged so the next phase owns the decision). — **Phase 14 outcome:** the README claim was **removed** (documentation now matches the code); the rename feature remains unbuilt and is tracked in `DEVELOPER_HANDOFF.md` § Known Issues / § Future Improvements.
 
 ### LOW
 
@@ -131,7 +133,7 @@
 - **Status: Not Fixed.** `useAuth` exposes only `signIn`/`signUp`/`signOut`; Phase 7 explicitly documented these absences rather than faking them. Adding Supabase reset-email flows is a feature for a future phase.
 
 **U-18 · Info · Deck/card mutation errors show raw Supabase messages.**
-- **Status: Not Fixed.** `formError = error.message` (create deck/card) surfaces provider text. Friendly-message mapping currently exists only for auth (`authForm.js`) and AI (`ai.js`); extending it app-wide is a copy pass, not a usability defect — errors are still announced (`role="alert"`) and actionable (dialog stays open).
+- **Status: Fixed — but by Phase 12 (Security), not this phase.** At Phase 10 this read `formError = error.message` (create deck/card). Phase 12's error-safety work added `friendlyDbError` (`src/lib/errors.js`) at every mutation render point — `CreateDeckDialog`, DeckDetail add/edit, Upload save — delete-failure toasts use fixed friendly copy, and raw messages are development-only (verified by the 56-check security smoke). Nothing further to do.
 
 ---
 
@@ -148,7 +150,7 @@
 | 7 · Flexibility / efficiency | U-04 (`?deck=` deep link), U-05 (batch entry) |
 | 8 · Aesthetic / minimalist | No issues — prior phases already enforce the type scale and restrained layout |
 | 9 · Help users recover | U-06, U-11, U-12; destructive clarity U-07 |
-| 10 · Help & documentation | README accurate except U-08; in-app hints (key setup, import formats) are present |
+| 10 · Help & documentation | README accurate (the U-08 rename claim was removed in Phase 14); in-app hints (key setup, import formats) are present |
 
 ---
 
