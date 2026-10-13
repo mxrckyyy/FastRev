@@ -119,7 +119,7 @@ begin
     and created_at > now() - make_interval(hours => p_window_hours);
 
   if v_count >= p_limit then
-    raise exception 'AI generation quota exceeded (% of % per % hours)'
+    raise exception 'AI generation quota exceeded (%% of %% per %% hours)'
       using errcode = 'P0001',
             detail = 'AI_GENERATION_QUOTA_EXCEEDED';
   end if;

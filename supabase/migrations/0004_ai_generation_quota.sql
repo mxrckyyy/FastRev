@@ -117,7 +117,7 @@ begin
     and created_at >= v_day_start;
 
   if v_successes >= p_limit then
-    raise exception 'AI generation quota exceeded (% of % successful generations per UTC day)'
+    raise exception 'AI generation quota exceeded (%% of %% successful generations per UTC day)'
       using errcode = 'P0001',
             detail = 'AI_GENERATION_QUOTA_EXCEEDED';
   end if;
@@ -131,7 +131,7 @@ begin
     and status in ('reserved', 'completed', 'failed');
 
   if v_attempts >= p_attempt_limit then
-    raise exception 'AI generation attempt limit exceeded (% of % attempts per UTC day)'
+    raise exception 'AI generation attempt limit exceeded (%% of %% attempts per UTC day)'
       using errcode = 'P0001',
             detail = 'AI_GENERATION_ATTEMPT_LIMIT';
   end if;

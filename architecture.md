@@ -620,6 +620,16 @@ see Security section above.
   `tokens_used`/`provider`/`cards_generated` (retried once on transient
   failure, then logged) → provider failure finalizes `failed` (releases
   success quota, keeps attempt pressure).
+- **Pre-Deployment Audit evidence (2026-10-13, local PG 17.11):** the actual
+  files 0003→0004→0005 apply cleanly (exit 0, idempotent re-runs) and a
+  40-way concurrent burst suite is **27/27 green** (bursts cap at exactly 20
+  held slots across 4 runs; TTL expiry, double/foreign finalize, RLS
+  select-isolation + write denials, RPC grant denials + service_role
+  execution, UTC-day scoping). The clean-room apply caught one genuine bug
+  missed by every static check: bare `%` placeholders in three RAISE
+  messages (0003 ×1, 0004 ×2) fail PL/pgSQL compilation — fixed as
+  literals-only `%%` (those files could never have applied as written, so
+  no live state can depend on the old text).
 
 ## External Services
 - Supabase (DB, Auth, RLS, pgvector + Edge Functions)
@@ -770,10 +780,18 @@ User → React Upload.jsx (signed in, deck chosen, notes entered)
   build + Vercel deploy). Its commands are standard Supabase CLI; confirm
   against `supabase --version` (the CLI was not installed in the build
   environment, so no version is pinned here).
-- **Not done / not claimed:** live deploy, live verification, and
-  migrations 0002–0004 execution (no credentials here); image import paused
-  until a server-side OCR endpoint exists; no fake/test paths remain in the
+- **Not done / not claimed:** live deploy, live verification, and remote
+  migration execution (no credentials here); image import paused until a
+  server-side OCR endpoint exists; no fake/test paths remain in the
   function (unconfigured secrets answer an explicit 501).
+- **Pre-Deployment Audit evidence (2026-10-13):** local PG 17.11 applied the
+  actual 0003→0004→0005 cleanly (idempotent re-runs exit 0) and ran 27/27
+  real-database checks green — 40-way bursts cap at exactly 20 held slots
+  (4 runs), TTL/double/foreign finalize correct, RLS isolation + write
+  denials enforced, RPC grants enforced, UTC-day scoping correct. The apply
+  itself caught and fixed the bare-`%` RAISE compile bug in 0003/0004. Full
+  regression (lint + build + all suites + `dist/` scan) green. Verdict:
+  **READY FOR MANUAL DEPLOYMENT** (`supabase/README.md` § Deploy).
 
 ## File Extension Rules
 - React components: `.jsx`

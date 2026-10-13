@@ -341,10 +341,12 @@ Full prioritized checklist in Section 12.
 | Daily quota: below/at/attempt-cap (live) | Allow / 429 / 429 | Unit-tested `claimSlot` mapping (23 checks); SQL lock-order asserted | PASS (unit) / NOT VERIFIED (live) |
 | Concurrent burst at limit (live) | Exactly N successes, no overshoot | Design + lock-order assertion only | NOT RUN |
 | Quota slot accounting (fix verification) | Bursts cap at 20; failures release; no double-count | 19/19 algorithm sim (5 adversarial runs each; negative control overshoots to 59 on old predicate) | PASS (model — proves algorithm, not PG) |
+| Real-Postgres apply + burst suite (audit) | 0003→0005 apply cleanly; 40-way bursts cap at exactly 20; TTL/RLS/grants/UTC correct | Local PG 17.11, actual files, 27/27 green (4 burst runs) | PASS (local PG — not Supabase) |
+| Migration compile audit | All RAISE statements compile | Clean-room apply caught bare-`%` bug in 0003/0004 (fixed `%%`); re-apply + idempotent re-runs exit 0 | PASS (after fix) |
 | Finalize retry boundedness | Transient retry ≤N calls; definitive no-op single call | 7/7 unit checks (incl. exactly-3-calls cap, invalid attempts→1) | PASS (unit) |
 | Fix wiring + forward-only SQL | Held-slot gate, same signature, 0004 untouched, lockdown re-asserted | 23/23 static assertions | PASS (static) |
 | Separate user quotas (live) | Independent budgets | Per-`user_id` lock/count asserted in SQL; id passthrough unit-tested | NOT VERIFIED live |
-| Cross-user ledger access (live) | Denied reads/writes | RLS default-deny + no write policies + RPC ownership asserted statically | NOT VERIFIED live |
+| Cross-user ledger access | Denied reads/writes | RLS default-deny + no write policies + RPC ownership asserted; **local-PG proven** (select isolation, insert/update/delete denials, grant denials) | PASS (local PG) / NOT VERIFIED (Supabase JWT wiring) |
 | Reservation cleanup on failure/crash (live) | `failed` / TTL `expired` | Code paths reviewed; `finalize→false` unit-tested | NOT VERIFIED live |
 | Card preview + save (live E2E) | Preview → Save All → deck page | Unchanged code paths; no live session here | NOT RUN |
 | Browser storage inspection (live) | No `*_api_key` values | `dist/` bundle scan clean (only purge literals, confirmed in context) | PASS (bundle) / NOT RUN (live DevTools) |
@@ -365,7 +367,7 @@ Full prioritized checklist in Section 12.
 | Browser calls AI providers directly? | **No** | Single network call site for generation: `supabase.functions.invoke`; provider URLs exist only in `supabase/functions/` (Deno, server) |
 | Secrets in VITE_* vars? | **No** | `.env.example` holds only the 2 Supabase vars + an explicit never-put-secrets warning; `src/` has no `VITE_*` provider/service-role reads |
 | JWT verification enabled? | **Yes (dual layer)** | `config.toml verify_jwt=true` + `auth.getUser()` in-handler; `verify_jwt=false` appears nowhere outside a prohibitive comment; verified-user id only |
-| RLS prevents cross-user access? | **By construction, NOT VERIFIED live** | Read-own SELECT only, zero write policies, no anon policies (asserted); ownership triggers in 0002 (unexecuted); live two-user test pending |
+| RLS prevents cross-user access? | **Enforced (local-PG proven); Supabase wiring NOT VERIFIED live** | Read-own SELECT only, zero write policies, no anon policies (asserted); local-PG sessions prove isolation + denials; ownership triggers in 0002 (unexecuted); live two-user test pending |
 | Users can manipulate own ledger rows? | **No (by construction)** | No write policies (direct writes denied); RPCs service_role-only; finalize requires `reserved`+owner match and returns boolean |
 | Concurrent bypass of quota? | **Prevented by design, NOT RUN live** | Per-user advisory xact lock + single-transaction check-expire-count-insert (order asserted); live burst test pending |
 | Logs expose sensitive info? | **No** | Handler/provider logs carry user id + outcome codes + kinds only (asserted: no notes/tokens/keys/bodies in any `console.*` line) |
@@ -379,6 +381,7 @@ Full prioritized checklist in Section 12.
 
 **Confirmed and fixed (Fix Phase 2026-10-13):**
 0. 0004 completed-only success gate → parallel-burst overshoot (~59 vs 20). Fixed by 0005 (held-slot gate). Algorithm-sim verified incl. negative control; live burst test still pending.
+0b. Bare-`%` RAISE placeholders in 0003 (×1) and 0004 (×2) fail PL/pgSQL compilation — those files could never have applied as written (found by clean-room apply on local PG 17.11; every static check missed it). Fixed as literals-only `%%`; no semantic change; 0003→0005 re-apply + idempotent re-runs exit 0.
 1. Migrations 0002–0004 written but never executed — ledger/quota/triggers don't exist remotely.
 2. Function written but never served/deployed; no live call of any kind made from the new code.
 3. Image/screenshot import disabled (no server OCR endpoint) — loud trade-off with documented follow-up.
@@ -411,8 +414,8 @@ Full prioritized checklist in Section 12.
 | 2 | Provider API keys remain server-side | **PASS** | Secrets-only access, zero key material in `src/`+`dist/`, CSP forbids provider origins |
 | 3 | Frontend uses the Edge Function for AI generation | **PASS** | Single invoke site; old chain deleted (grep-verified) |
 | 4 | Configured fallback chain works | **PARTIALLY PASS** | Logic mock-verified 33/33; no live provider call exists |
-| 5 | Daily limits enforced for authed users | **PARTIALLY PASS** | Claim/finalize logic + SQL asserted; never executed against PG (Fix Phase corrected the gate; still unexecuted) |
-| 6 | Concurrent requests cannot bypass quota | **PARTIALLY PASS** | Lock-ordered atomic design + held-slot fix asserted; algorithm-sim caps bursts at 20; live burst test NOT RUN |
+| 5 | Daily limits enforced for authed users | **PARTIALLY PASS** | Claim/finalize logic + SQL asserted; local-PG proven (bursts, TTL, finalize); remote execution pending |
+| 6 | Concurrent requests cannot bypass quota | **PARTIALLY PASS** | Lock-ordered atomic design + held-slot fix asserted; algorithm-sim + **real-PG 40-way bursts (4 runs) cap at exactly 20**; Supabase-remote burst test pending |
 | 7 | Users cannot access others' records | **PARTIALLY PASS** | RLS default-deny + RPC ownership asserted; two-user test NOT RUN |
 | 8 | Generated cards follow app schema | **PASS** | Server + client validation, caps match DB CHECKs (mock-verified) |
 | 9 | Card previews and saving still work | **PASS** (code) / NOT VERIFIED (live) | Paths byte-preserved; live session pending |
@@ -443,6 +446,7 @@ Full prioritized checklist in Section 12.
 - **Phase reports used:** per-phase completion summaries from this session (Phases 0–8). No pre-existing consolidated report existed; nothing was reconstructed beyond what the code shows.
 - **Re-verified for this report (2026-10-13):** `index.ts` (full read), `quota.ts` (full read), `providers.ts` (IDs/URLs/limits), `response.ts` (11 codes), `validation.ts` (limits), `package.json` (scripts/deps), plus Phase 7's re-runs (harnesses, deploy audit, `dist/` scan) and Phase 8's file-reference + lint checks.
 - **Re-verified for the Fix Phase (2026-10-13):** `0004_ai_generation_quota.sql` (full read — confirmed the completed-only gate), `quota.ts` + `index.ts` finalize paths, `providers.ts`/`ai.js`/`Upload.jsx` (unchanged — regression suites re-run green), tooling survey (no CLI/Deno/Docker/PG), full regression battery (lint + build + all suites + `dist/` scan).
+- **Pre-Deployment Audit (2026-10-13):** local PG 17.11 WAS found after all — stood up a temp cluster, applied the actual 0003→0004→0005 (exit 0, idempotent), ran **27/27 real-database checks green** (see Fix Phase section). The clean-room apply caught a genuine compile bug static checks missed: bare `%` in three RAISE messages (0003 ×1, 0004 ×2) → fixed as literals-only `%%` (those files could never have applied as written). Verdict recorded in `AGENTS.md`: **READY FOR MANUAL DEPLOYMENT**.
 - **Could not be verified:** anything requiring a live Supabase project, deploy, secrets, provider keys, Deno/CLI, or a browser (see Sections 9, 11, 12).
 - **Documentation conflict found (reported, not silently resolved):** `PROJECT_ARCHITECTURE.md` still documents a "zero-first-party-endpoint surface" and `PROJECT_CONTEXT.md`/`DEVELOPER_HANDOFF.md` predate the Edge Function track — they contradict the new `generate-cards` endpoint. `AGENTS.md` + `architecture.md` (updated Phase 8) are the accurate sources; the three older docs need a sync pass (out of scope for this task).
 - **No application behavior was modified** while preparing this report. No secrets are included.
