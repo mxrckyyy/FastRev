@@ -13,7 +13,7 @@
 - `src/components/TopBar.jsx` — reusable page bar: hamburger (mobile), title or breadcrumb, theme toggle, account menu.
 - `src/components/MobileNav.jsx` — bottom nav below `lg` (Dashboard/Decks/Review/Upload), in normal flow.
 - `src/components/MobileMenu.jsx` — hamburger dialog: full nav list + sign-out (reuses shadcn Dialog); close returns focus to the hamburger button via `returnFocusRef` + `onCloseAutoFocus` preventDefault (Phase 13).
-- `src/components/UserMenu.jsx` — account dropdown (top-bar icon + sidebar row variants): Settings, Sign out.
+- `src/components/UserMenu.jsx` — account dropdown (top-bar icon + sidebar row variants): Sign out only.
 - `src/components/Breadcrumbs.jsx` — reusable trail; last item is the current page (not a link).
 - `src/lib/nav.js` — NAV_ITEMS / MOBILE_NAV_ITEMS, `getPageMeta(pathname, decks)`, shared NavLink class builders.
 - `src/lib/ratings.js` — `RATINGS` config (value/label/Button-variant in keyboard order 1–4); single source for the rating buttons, shortcut hint, keyboard map and completion tally.
@@ -36,8 +36,12 @@
 - `src/components/ui/checkbox.jsx` — shadcn-style radix checkbox (added Phase 5); unchecked border uses `foreground/50` (≥3:1 vs card) instead of stock `border-input`.
 - `src/lib/supabase.js` — Supabase client singleton.
 - `src/lib/fsrs.js` — FSRS scheduling wrapper.
-- `src/lib/ai.js` — Gemini card generation + fallback providers + image transcription.
-- `src/lib/extract.js` — material import: PDF (pdf.js, local), images (Gemini vision), .docx (mammoth), .txt/.md.
+- `src/lib/ai.js` — Edge Function client (`generateCards` via
+  `supabase.functions.invoke('generate-cards')`, 95 s timeout, tolerant
+  error-shape mapping to `AiError`, client-side card-shape validation).
+  No key storage, no provider endpoints, no provider SDKs anywhere in the
+  frontend (Phase 6 of the Edge Function track removed them all).
+- `src/lib/extract.js` — material import: PDF (pdf.js, local), .docx (mammoth), .txt/.md. No network calls; image import paused (see Phase 6 note below).
 - `src/lib/theme.js` — dark-mode helpers (read/apply/toggle/subscribe, localStorage `fastrev_theme`).
 - `src/lib/authForm.js` — pure auth-form logic: `validateAuthEmail` / `validateAuthPassword` (signup-only 6-char minimum) / `friendlyAuthError` (Supabase message → friendly copy).
 - `src/lib/errors.js` — `friendlyDbError(error, fallback)` (Phase 12): maps raw Postgres/PostgREST messages (RLS denial, length check, uuid syntax, network…) to safe copy at **render points**; raw text is logged to console and shown only in dev builds.
@@ -51,12 +55,10 @@
 - `src/components/ErrorBoundary.jsx` — Global error boundary wrapping the router.
 - `src/pages/Auth.jsx` — Phase 7 auth screen: default export (state/validation/Supabase calls) + exported `AuthView({ … })` presentational view (see Authentication below).
 - `src/pages/Decks.jsx` — `/decks` route: content width + shared `DeckList`.
-- `src/pages/SettingsPage.jsx` — `/settings` route: wraps the existing `SettingsForm`.
 - `src/pages/DeckList.jsx` — deck grid (1/2/3 columns) + create deck, with loading skeletons / error retry / empty state.
 - `src/pages/DeckDetail.jsx` — cards inside a deck: loading renders the Phase 8 `DeckDetailSkeleton` (header + card-row shapes, `aria-busy`, sr-only "Loading deck…"), CRUD success/failure reported via toasts; long-name/long-token text is contained (`min-w-0`/`break-words`) and inline edit moves focus to the question field / returns it to the row's Edit button (Phase 13).
 - `src/pages/Review.jsx` — focus-mode review session: queue/submit via `useReviews`, keyboard shortcuts, focus management, progress, rating flow, loading/error/empty/completion states (Phase 4; see below).
 - `src/pages/Upload.jsx` — two-panel card-generation workspace: material input + Generate → skeleton/preview with select/edit/remove → Save All / Save Selected (Phase 5; see below). Async submits use `LoadingButton`; the save-confirmation toast is the global sonner toast (Phase 8).
-- `src/pages/Settings.jsx` — API key settings dialog (localStorage only).
 - `src/pages/Analytics.jsx` — learning-analytics page: stats row, Highlights chips, activity/forecast charts, rating breakdown, weak topics (Phase 6; see below).
 - `src/pages/Dashboard.jsx` — learning overview: greeting, Start Review hero, 4 stat cards, priority decks (Phase 3; see below).
 - `src/App.jsx` — Router + layout; route-level `React.lazy` for every page except Auth/Dashboard (Phase 11), with Suspense boundaries at the shell outlet and on `/review`.
@@ -92,12 +94,12 @@ Desktop (≥1024px)               Mobile (<1024px)
 ```
 
 - **Routing** — `App.jsx`: `<ProtectedLayout>` → `<AppShell>` wraps `/dashboard`, `/decks`, `/decks/:id`, `/upload`, `/analytics`, `/settings`; `/review` is a **sibling**, not a child — that is the focus-mode opt-out (no sidebar/top bar/bottom nav; Review renders its own minimal header). Adding a focus route = add it outside `<AppShell>`.
-- **Sidebar** (`w-60`, `bg-card`, `border-r`) — brand → 6 primary items (Dashboard, Decks, Review, Upload, Analytics, Settings) → account footer. Stable: the root is `h-dvh overflow-hidden`, only `<main class="min-h-0 flex-1 overflow-y-auto">` scrolls.
+- **Sidebar** (`w-60`, `bg-card`, `border-r`) — brand → 5 primary items (Dashboard, Decks, Review, Upload, Analytics) → account footer. Stable: the root is `h-dvh overflow-hidden`, only `<main class="min-h-0 flex-1 overflow-y-auto">` scrolls.
 - **Navigation config** — `src/lib/nav.js` is the single source: sidebar, bottom bar, hamburger menu and top-bar titles all read `NAV_ITEMS`/`MOBILE_NAV_ITEMS`/`getPageMeta()`. Active state = `bg-primary/10 + text-primary + font-medium` (≥ 5.6:1 in both themes) plus NavLink's `aria-current="page"` — never color alone.
 - **Top bar** — title derived from the route (`getPageMeta`), never authored by pages: plain routes render an `<h1>`; nested deck pages render a breadcrumb (`Decks / Biology`, last segment = current page, `aria-current`). Right side: ThemeToggle + account menu. Below `lg` a hamburger opens the menu.
 - **Mobile bottom nav** — the 4 core destinations, rendered **in normal flow** inside the shell column (not `fixed`), so it physically cannot cover content; `env(safe-area-inset-bottom)` padding clears the iOS home indicator. Everything mobile switches at `lg` (1024px), matching the sidebar's breakpoint.
-- **Mobile menu** — shadcn Dialog (Radix focus trap/Escape/labelling): full 6-item nav + email + sign-out. Upload's inline toast was retired in Phase 8 in favour of the global sonner toast (Toaster offset clears the bottom nav).
-- **User menu** — `UserMenu.jsx` (radix DropdownMenu): email label + Settings + Sign out only — no invented profile backend. Sidebar (full-width row) and top-bar (avatar) variants.
+- **Mobile menu** — shadcn Dialog (Radix focus trap/Escape/labelling): full 5-item nav + email + sign-out. Upload's inline toast was retired in Phase 8 in favour of the global sonner toast (Toaster offset clears the bottom nav).
+- **User menu** — `UserMenu.jsx` (radix DropdownMenu): email label + Sign out only — no invented profile backend. Sidebar (full-width row) and top-bar (avatar) variants.
 - **Content width** — shell adds no padding; each page keeps its own container (`mx-auto max-w-2xl/3xl/5xl px-4 py-6 sm:px-6`), so review/analytics/full-width pages stay in control.
 - **Headings** — shell top bar owns the page `<h1>`; pages use `h2`+ (DeckDetail keeps its `h1` because its top bar shows a breadcrumb, not a title). Exactly one document `<main>`: the shell's (Review's own `<main>` only exists in focus mode, where the shell is absent).
 - **Page chrome removed in Phase 2** — per-page headers/back-links/`min-h-screen` wrappers deleted from Dashboard/DeckDetail/Upload/Analytics; their content (welcome text, subtitles) was kept.
@@ -187,7 +189,7 @@ Desktop (≥1024px) — container max-w-6xl
 
 - **Layout** — page container `mx-auto max-w-6xl px-4 py-6 sm:px-6`; page `<h2>` (top bar owns the `<h1>`); two `<section aria-labelledby>` landmarks in `lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]` (`xl:` 26rem) with `lg:items-start`. The input panel is capped so it never balloons; the preview panel takes the rest and becomes the focus after generation. Below `lg` everything stacks in workflow order: input → generate → status → cards → save.
 - **Input panel** — deck `<select>` (existing native control, restyled tokens unchanged) → notes label with a live character count (`tabular-nums`, plain text so it doesn't flood screen readers) → `Textarea` (`min-h-36 max-h-60`, `field-sizing-content` grows to the cap, then scrolls) → dashed dropzone (`Browse files` button + `Supported: …` caption from `SUPPORTED_INPUTS`) → full-width primary Generate (`size="lg"`, `aria-busy`, disabled without notes/keys/while running; handler also guards re-entry). Drag-over highlights both the textarea (ring) and the dropzone (`border-primary bg-primary/5`). The dropzone is presentation over the **existing** import pipeline — same `accept`, same `extractFromFile`, same append-to-notes behavior, no second validation system. Import success/error and the no-API-key hint stay here.
-- **Generation states** — the preview panel gets `aria-busy` while generating and shows `GenerationSkeleton`: a `role="status"` line ("Generating review cards…" — no fake steps or percentages; the backend reports none) plus 4 decorative (`aria-hidden`) skeleton cards mirroring the real row shape (checkbox + index chip + question/answer lines). Pulse is clamped to 0.01 ms by the global `prefers-reduced-motion` rule. On failure the notes **and any previously generated rows are kept** (only the request failed) and a `role="alert"` box shows the existing `friendlyMessage` copy with the same Settings/Retry/Try again actions.
+- **Generation states** — the preview panel gets `aria-busy` while generating and shows `GenerationSkeleton`: a `role="status"` line ("Generating review cards…" — no fake steps or percentages; the backend reports none) plus 4 decorative (`aria-hidden`) skeleton cards mirroring the real row shape (checkbox + index chip + question/answer lines). Pulse is clamped to 0.01 ms by the global `prefers-reduced-motion` rule. On failure the notes **and any previously generated rows are kept** (only the request failed) and a `role="alert"` box shows the existing `friendlyMessage` copy with Retry/Try-again actions.
 - **Preview cards** (`GeneratedCard`) — checkbox → `Card N` (+ warning-colored "· needs question and answer" when invalid, `text-warning-foreground dark:text-warning`) → question (`font-medium`) → answer (muted) → optional source line; aria-labelled pencil Edit + trash Remove buttons (`text-destructive` hover). Selected rows get `border-primary/50 ring-1 ring-primary/20` **plus** the checkbox checkmark — state is never color-only. Long text is `break-words whitespace-pre-wrap`; empty fields show italic muted placeholders.
 - **Selection & counts** — every generated row starts selected (`makeRow` seeds `selected: true`); the toolbar is a select-all `Checkbox` with an `htmlFor` label ("Select all" / "Deselect all") plus "N of M selected"; the panel-header `Badge variant="soft"` shows the generated total. Selection lives on the row objects, so removal and partial saves stay consistent automatically. Save-button labels carry counts: `Save All (12)`, `Save Selected (3)`.
 - **Editing** — parent-owned draft (`editDraft = { id, question, answer, source } | null`): Edit seeds the draft; the row remounts with `key={id}::edit` (fresh validation state per session — errors can never leak between edits — and only one card edits at a time). Editor = labelled Question/Answer textareas (`min-h-16 max-h-40`, `aria-invalid` + `aria-describedby` while invalid) + optional Source input + **Save/Cancel**. Save validates (`role="alert"` "Question and answer are both required." + refocus) then commits; Cancel discards. "Add blank card" creates a row and opens it straight into edit (draft seeded to empty strings).
@@ -393,7 +395,9 @@ Supabase (PostgREST/Auth, RLS + anon key) and the three AI providers (user-suppl
 - **Security headers + CSP** via `vercel.json` (Vercel applies them to every response,
   including deep routes — verified locally against the built app): CSP with
   `script-src 'self'` (no inline/eval), `connect-src` allowlisting only
-  `https://*.supabase.co` + the three provider origins, `object-src 'none'`,
+  Supabase (`https://*.supabase.co`, plus `supabase.co`/`wss` for auth/realtime
+  — the three AI-provider origins were dropped in Phase 6 of the Edge
+  Function track, when the last browser-direct provider call was deleted), `object-src 'none'`,
   `base-uri 'self'`, `frame-ancestors 'none'` + `X-Frame-Options: DENY`, nosniff,
   Referrer-Policy, Permissions-Policy, COOP/CORP, HSTS, `X-Permitted-Cross-Domain-Policies`.
   The inline theme bootstrap was moved to `public/theme-init.js` so no `unsafe-inline`
@@ -410,13 +414,15 @@ Supabase (PostgREST/Auth, RLS + anon key) and the three AI providers (user-suppl
   notes 60,000) + trim guards, and DB `CHECK` constraints (see schema below).
 - **AI output caps**: `normalizeCard` truncates fields to the same limits and the parse
   step slices the list to `MAX_CARDS = 40`.
-- **Upload guards**: 10 MB images / 25 MB documents checked before parsing; MIME **and**
+- **Upload guards**: 25 MB documents checked before parsing; MIME **and**
   extension validated; nothing is ever stored server-side.
 - **Enumeration-safe auth copy**: duplicate sign-up returns a non-committal message.
 - **Secret hygiene**: `.env*` gitignored (`.env.example` documents names only), no secret
-  ever committed (git history + `dist/` bundle pattern-scanned clean), API keys live only
-  in localStorage and go only to their provider origin (same-origin script constraint +
-  `connect-src` both enforce this).
+  ever committed (git history + `dist/` bundle pattern-scanned clean). Since
+  Phase 6 of the Edge Function track there are **no provider keys anywhere
+  client-side** (no storage, no inputs, no provider endpoints in the bundle —
+  `connect-src` additionally forbids the browser from reaching them); the only
+  client secret material is the public Supabase anon key (by design, RLS-gated).
 
 ### DB hardening (written, **not yet executed**)
 
@@ -433,12 +439,13 @@ only — **live RLS state and the new triggers remain unverified** (SEC-05, top 
 ### Accepted risks (documented, not silent)
 
 - Anon key is public-by-design (protected by RLS); no service-role key anywhere client-side.
-- API keys in localStorage = single-user-app trade-off (same-origin readable) — never add
-  third-party scripts to the origin.
+- ~~API keys in localStorage = single-user-app trade-off~~ — **removed in
+  Phase 6 of the Edge Function track** (no client keys remain; never add
+  third-party scripts to the origin regardless).
 - `npm audit`: 7 high findings are dev-only (shadcn CLI chain); 3 moderate runtime
   findings are `mammoth → sprintf-js` with **no non-breaking fix** (SEC-14).
-- AI chain runs in the browser: an abuser can only burn **their own** quota; if this ever
-  matters, move generation to an Edge Function with per-user quotas (SEC-12, future work).
+- ~~AI chain runs in the browser~~ — **moved server-side** (Edge Function with
+  per-user quotas, 20/day UTC); the browser holds no provider credentials.
 - Email confirmation stays ON in production (US-15).
 
 ### Verification (Phase 12)
@@ -563,24 +570,112 @@ HTTP 200) · file-reference and cross-document consistency checks green.
     reps, lapses, state, last_review, created_at
   )
 - `review_logs` (id, card_id, user_id, rating, reviewed_at)
+- `ai_generations` (id, user_id, created_at, tokens_used, provider,
+  cards_generated) — Phase 1 (Edge Function track) usage ledger, 0003 migration
 
 All tables have RLS enabled with `auth.uid() = user_id` policies.
 Phase 12 adds (0002 migration, pending execution): ownership triggers
 (`assert_deck_owner` / `assert_card_owner`) + `NOT VALID` length CHECK constraints —
 see Security section above.
 
+### AI generation ledger & quota gate (0003 migration, pending execution)
+- **Table** `ai_generations`: one row per generation request
+  (`tokens_used` defaults to 0 — providers don't reliably return usage, so
+  0 means "unknown"; `provider` records which fallback-chain member served
+  the request; `cards_generated` counts the cards kept). Index
+  `ai_generations_user_created_idx (user_id, created_at desc)` serves the
+  quota-count and usage-history queries. FK `user_id → auth.users`
+  `ON DELETE CASCADE`, matching every other table.
+- **Access rules**: `authenticated` gets exactly ONE policy —
+  `ai_generations_select_own` (read own rows for usage history). There is
+  deliberately NO insert/update/delete policy, and none for `anon`, so with
+  RLS enabled every direct browser write is denied. The migration also
+  `DROP POLICY IF EXISTS` any write-policy name, guaranteeing the
+  read-only posture survives re-runs and future scripts.
+- **Server-side recording**: the generate-cards Edge Function uses the
+  `service_role` key (server-only, never shipped to the browser — RLS is
+  bypassed for that role) to record usage. The anon key in the frontend
+  bundle can never write this table.
+- **Atomic quota gate**: `claim_ai_generation_slot(p_user_id, p_limit
+  DEFAULT 20, p_window_hours DEFAULT 24)` is `SECURITY DEFINER` and holds a
+  per-user transaction-scoped advisory lock
+  (`pg_advisory_xact_lock(hashtextextended(...))`) while it counts the
+  window and inserts the claim row — concurrent requests for one user
+  serialize, so a count-then-insert race can never overshoot the limit.
+  Over quota raises `AI_GENERATION_QUOTA_EXCEEDED` (SQLSTATE `P0001`),
+  which the Edge Function maps to HTTP 429. `EXECUTE` is revoked from
+  `public`/`anon`/`authenticated` and granted only to `service_role`, so
+  clients cannot call it directly with an arbitrary user id. Flow: claim
+  BEFORE the provider call (no wasted quota) → on success the Edge
+  Function `UPDATE`s the claimed row with real
+  `tokens_used`/`provider`/`cards_generated`; failed attempts stay as
+  zero-token rows and still count (conservative against retry-abuse).
+
 ## External Services
-- Supabase (DB, Auth, RLS, pgvector)
-- Google Gemini (gemini-3.8-flash, card generation + image text transcription)
-- Groq (`openai/gpt-oss-120b`) / Cerebras (`llama-3.3-70b`) — fallback LLM providers
+- Supabase (DB, Auth, RLS, pgvector + Edge Functions)
+- Google Gemini (`gemini-3.8-flash`) / Groq (`openai/gpt-oss-120b`) / Cerebras (`gpt-oss-120b`) — server-side-only LLM providers, called exclusively by the `generate-cards` Edge Function with function secrets
 - Vercel (frontend hosting; `vercel.json` supplies the security-header set — see Security section)
 
 ## Data Flow: Card Generation
-1. User pastes notes in `Upload.jsx`, or imports a file (button / drag-and-drop → `extract.js` extracts text into the notes box; images are transcribed via `ai.js transcribeImage` using the user's Gemini key).
-2. `ai.js` sends notes to Gemini with a structured JSON prompt.
-3. Gemini returns array of `{ question, answer, source }`.
-4. User edits, selects, and approves cards in the preview UI (Phase 5: checkbox selection, inline editor, Save All / Save Selected).
-5. `useCards.js` inserts approved cards into the `cards` table.
+1. User pastes notes in `Upload.jsx`, or imports a file (button / drag-and-drop → `extract.js` extracts text locally into the notes box: PDF text layer, `.docx`, `.txt`/`.md` — no network, no keys).
+2. `ai.js generateCards` invokes the `generate-cards` Edge Function via `supabase.functions.invoke` (95 s client timeout) — no provider keys leave the browser; the JWT authenticates the call.
+3. The Edge Function runs Groq → Cerebras → Gemini server-side (quota-claimed first) and returns `{ cards, provider }`.
+4. `ai.js` re-validates `data.cards` shape client-side (whitelisted fields, DB caps) and maps function errors to `AiError` codes (server codes pass through allowlisted; unknown shapes fall back to status mapping; SDK throw-vs-return differences handled) — raw provider internals never reach the screen.
+5. User edits, selects, and approves cards in the preview UI (Phase 5 of the UI plan: checkbox selection, inline editor, Save All / Save Selected).
+6. `useCards.js` inserts approved cards into the `cards` table.
+
+### Edge Function `generate-cards` (Phase 6: zero client keys, `/settings` deleted)
+- Live path: Browser (`ai.js generateCards` → `supabase.functions.invoke`)
+  → Edge Function (JWT verify → UTC-day quota claim → Groq → Cerebras →
+  Gemini → finalize) → `{ cards, provider }`. Phase 5 deleted the
+  browser-direct generation chain; Phase 6 deleted everything else
+  key-shaped: `src/pages/Settings.jsx` + `src/pages/SettingsPage.jsx`
+  (deleted — they were exclusively key management), the `/settings` route
+  and all nav/menu entries (5 nav items now), every `SettingsDialog` /
+  "Open Settings" affordance in `Upload.jsx`, all localStorage key
+  helpers, `transcribeImage`, and the image-import path (`accept` drops
+  `image/*`; `SUPPORTED_INPUTS` is PDF/DOCX/TXT/MD). `vercel.json`
+  `connect-src` no longer allowlists any provider origin.
+- Known trade-off (not silent): image/screenshot import is **paused** —
+  it depended on the user's Gemini key for OCR. Text imports are
+  unaffected. Restoring it means a server-side transcription endpoint
+  using the function secret (follow-up, not built here).
+- Files: `supabase/functions/generate-cards/index.ts` (Deno.serve handler),
+  `providers.ts` (live chain Groq `openai/gpt-oss-120b` → Cerebras
+  `gpt-oss-120b` → Gemini `gemini-3.8-flash`; model IDs verified against
+  live provider docs 2026-10-13), `validation.ts` (notes limits: non-empty,
+  ≤ 5,000 words, ≤ 60,000 chars — mirrors `Upload.jsx`), `response.ts`
+  (contract + strict allowlist CORS), `quota.ts` (server-side limits +
+  claim/finalize client), `README.md` (secrets, local serve, curl checks);
+  `supabase/config.toml` keeps `verify_jwt = true` (never disabled).
+- Auth: gateway JWT check + in-handler `supabase.auth.getUser()` on the
+  bearer token; the verified `user.id` is used, never a body-supplied id.
+  Missing/invalid → 401 (`missing_auth` / `invalid_token`).
+- Contract: success `200 { cards: [...], provider }`; failures
+  `{ error: { code, message } }` — 400 `invalid_json`/`missing_notes`/
+  `notes_too_long`, 403 `origin_not_allowed` (exact-match
+  `ALLOWED_ORIGINS`, unset = localhost dev only), 405, 429
+  `quota_exceeded` (quota phase), 500 `server_error`, 501
+  `provider_not_configured` (no secrets set — the only 501 left), 502
+  `provider_failure` (all providers failed; generic copy, failure kinds
+  stay in server logs).
+- Secrets (`GROQ_API_KEY`, `CEREBRAS_API_KEY`, `GEMINI_API_KEY`) read via
+  `Deno.env.get` only; `SUPABASE_SERVICE_ROLE_KEY` (server-only) is used
+  solely for the quota ledger RPCs; logs carry user id + outcome codes only
+  (never notes, tokens, or keys).
+- **Quota (Phase 4, migration 0004):** `quota.ts` owns server-side config
+  (`AI_DAILY_LIMIT` 20 / `AI_ATTEMPT_LIMIT` 60 / `AI_RESERVATION_TTL_MINUTES`
+  10 — env-tunable, never browser-visible) + `claimSlot`/`finalizeSlot` over
+  the `service_role`-only `claim_ai_generation_slot()` /
+  `finalize_ai_generation_slot()` functions. Reservation-and-finalization:
+  claim `reserved` BEFORE provider spend (per-user advisory lock serializes
+  concurrent requests) → success finalizes `completed` with real usage
+  (null → stays unknown) → provider failure finalizes `failed` (releases
+  success quota, keeps attempt-ceiling pressure) → abandoned reservations
+  expire after the TTL and are lazily marked `expired` (no cron). The limit
+  counts successes per UTC calendar day (boundary computed in UTC on both
+  sides); over-quota is `429 quota_exceeded` with friendly copy. Users keep
+  read-own SELECT on the ledger and zero write paths (RLS unchanged).
 
 ## Data Flow: Review Session
 1. `useReviews.js` queries `cards WHERE due <= now() AND user_id = auth.uid()`.

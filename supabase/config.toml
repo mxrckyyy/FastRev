@@ -1,0 +1,6 @@
+[functions.generate-cards]
+enabled = true
+# NEVER set verify_jwt = false to "make requests work": the Supabase gateway
+# rejects unauthenticated calls before they reach the handler, and index.ts
+# additionally validates the bearer token via supabase.auth.getUser().
+verify_jwt = true

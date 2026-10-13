@@ -34,6 +34,25 @@ own — [`migrations/0002_authorization_hardening.sql`](./migrations/0002_author
    deck; a review log only your own card) and length `CHECK` constraints.
 3. Also safe to re-run.
 
+### Edge Function track — AI usage ledger (Phase 1)
+
+Apply [`migrations/0003_ai_generations.sql`](./migrations/0003_ai_generations.sql)
+in the same way (new SQL Editor query → paste → **Run**). It creates the
+`ai_generations` usage ledger (read-own-only RLS, no direct client writes)
+plus the atomic `claim_ai_generation_slot()` quota function (executable by
+the server role only). Safe to re-run. Verify with the commented queries at
+the bottom of the file — and note the remote database is only updated once
+YOU run it; committing the file does not apply it.
+
+### Edge Function track — quota finalization (Phase 4)
+
+Apply [`migrations/0004_ai_generation_quota.sql`](./migrations/0004_ai_generation_quota.sql)
+the same way, AFTER 0003. It adds the `status` ledger column
+(`reserved`/`completed`/`failed`/`expired`), upgrades the claim function to
+success-counted UTC-day quota + attempt ceiling + TTL expiry, and adds
+`finalize_ai_generation_slot()` (both functions service-role-only). Safe to
+re-run; verification queries are commented at the bottom of the file.
+
 ## 3. Verify the tables were created
 
 **Option A — in the SQL Editor**, run:

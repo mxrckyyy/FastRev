@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   FileUp,
-  KeyRound,
   Plus,
   RefreshCw,
   Sparkles,
@@ -28,21 +27,16 @@ import { useCards } from '@/hooks/useCards'
 import { useDecks } from '@/hooks/useDecks'
 import {
   generateCards,
-  hasAnyApiKey,
-  loadApiKeys,
   providerLabel,
 } from '@/lib/ai'
 import { extractFromFile, SUPPORTED_INPUTS } from '@/lib/extract'
 import { friendlyDbError } from '@/lib/errors'
 import { cn } from 'cn'
-import SettingsDialog from '@/pages/Settings'
 
 let rowCounter = 0
 
-// Client-side input bounds (SEC-06 / SEC-08). Images are capped lower
-// because they are base64-encoded and sent to Gemini inline.
+// Client-side input bound (SEC-06 / SEC-08).
 const MAX_NOTES_LENGTH = 60000
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 const MAX_FILE_BYTES = 25 * 1024 * 1024
 
 function makeRow(fields = {}) {
@@ -63,23 +57,28 @@ function isValidRow(row) {
 
 function friendlyMessage(error) {
   switch (error?.code) {
-    case 'missing_key':
-      return 'No API key configured yet. Add a free Gemini key to start generating.'
-    case 'invalid_key':
-      return 'Your API key was rejected by the provider. Check it in Settings.'
-    case 'rate_limit':
-      return 'Free tier limit reached. Try again in a minute or switch provider.'
+    case 'quota_exceeded':
+      return "You've used all 20 AI generations for today. Try again tomorrow."
     case 'network':
-      return 'Could not reach the AI provider. Check your connection and try again.'
+      return 'Could not reach the server. Check your connection and try again.'
     case 'too_long':
-      return 'That\u2019s too much text at once. Trim the notes to under 60,000 characters and try again.'
+    case 'notes_too_long':
+      return 'That\u2019s too much text at once. Trim the notes and try again.'
     case 'too_big':
       return error?.message || 'That file is too large to import.'
-    case 'unavailable':
-      return (
-        error?.message ||
-        'The AI provider is busy right now. Try again in a minute.'
-      )
+    case 'missing_notes':
+      return 'Add some study notes first, then generate.'
+    case 'missing_auth':
+    case 'invalid_token':
+      return 'Your session expired. Sign in again, then try generating.'
+    case 'origin_not_allowed':
+      return 'This app is not authorized to generate cards. Sign in again.'
+    case 'server_error':
+      return 'Generation is temporarily unavailable. Try again later.'
+    case 'provider_failure':
+      return "Couldn't generate cards right now. Try again in a minute."
+    case 'provider_not_configured':
+      return 'Generation is not configured yet. Try again later.'
     case 'malformed':
       return 'The AI replied in an unexpected format. Try generating again.'
     default:
@@ -107,7 +106,6 @@ export default function Upload() {
   // so the user never has to re-find it (U-04).
   const [deckId, setDeckId] = useState(() => searchParams.get('deck') || '')
   const [notes, setNotes] = useState('')
-  const [apiKeys, setApiKeys] = useState(() => loadApiKeys())
 
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState(null)
@@ -119,8 +117,6 @@ export default function Upload() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
 
-  const [settingsOpen, setSettingsOpen] = useState(false)
-
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState(null)
   const [importMsg, setImportMsg] = useState(null)
@@ -129,22 +125,11 @@ export default function Upload() {
   const addCardButtonRef = useRef(null)
   const editButtonsRef = useRef(new Map())
 
-  function handleSettingsChange(open) {
-    setSettingsOpen(open)
-    if (!open) setApiKeys(loadApiKeys())
-  }
-
   async function runImport(file) {
     if (importing) return
-    // Size guard before any read/parse/upload (SEC-06). `file.type` plus the
-    // extension decides which limit applies — extensions alone are never
-    // trusted elsewhere either.
-    const isImage =
-      (file.type || '').startsWith('image/') ||
-      /\.(png|jpe?g|webp|heic|heif)$/i.test(file.name || '')
-    const sizeLimit = isImage ? MAX_IMAGE_BYTES : MAX_FILE_BYTES
-    if (file.size > sizeLimit) {
-      const mb = Math.round(sizeLimit / (1024 * 1024))
+    // Size guard before any read/parse (SEC-06).
+    if (file.size > MAX_FILE_BYTES) {
+      const mb = Math.round(MAX_FILE_BYTES / (1024 * 1024))
       setImportError({
         code: 'too_big',
         message: `That file is over ${mb} MB. Import a smaller file (or split it up) and try again.`,
@@ -160,7 +145,7 @@ export default function Upload() {
         setImportError({
           code: 'empty',
           message:
-            'No selectable text found in this file. If it is a scanned PDF or a photo of a page, take a screenshot of it and import that image instead.',
+            'No selectable text found in this file. Scanned documents have no text layer yet — paste the text into the notes box instead.',
         })
         return
       }
@@ -206,7 +191,7 @@ export default function Upload() {
     setSaveError(null)
     setGenerating(true)
     try {
-      const result = await generateCards(notes.trim(), loadApiKeys())
+      const result = await generateCards(notes.trim())
       setRows(result.cards.map((card) => makeRow(card)))
       setEditDraft(null)
       setMeta({
@@ -356,8 +341,8 @@ export default function Upload() {
     (row) => row.selected && isValidRow(row),
   ).length
   const allSelected = rows.length > 0 && rows.every((row) => row.selected)
-  const noKeys = !hasAnyApiKey(apiKeys)
-  const canGenerate = Boolean(notes.trim()) && !noKeys && !generating
+  // Generation runs server-side and needs no browser key.
+  const canGenerate = Boolean(notes.trim()) && !generating
   const deck = decks.find((candidate) => candidate.id === deckId)
 
   return (
@@ -383,7 +368,7 @@ export default function Upload() {
                   Study material
                 </CardTitle>
                 <CardDescription>
-                  Paste notes, or import a PDF, image, or document.
+                  Paste notes, or import a PDF or document.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -438,7 +423,7 @@ export default function Upload() {
                   <Textarea
                     id="notes"
                     maxLength={MAX_NOTES_LENGTH}
-                    placeholder="Paste your notes here — or import a PDF, screenshot, or document…"
+                    placeholder="Paste your notes here — or import a PDF or document…"
                     className={cn(
                       'min-h-36 max-h-60',
                       dragging && 'border-ring ring-2 ring-ring/50',
@@ -481,7 +466,7 @@ export default function Upload() {
                       ref={fileInputRef}
                       type="file"
                       className="hidden"
-                      accept=".pdf,.txt,.md,.markdown,.docx,image/*"
+                      accept=".pdf,.txt,.md,.markdown,.docx"
                       onChange={handleFileChange}
                     />
                   </div>
@@ -498,21 +483,6 @@ export default function Upload() {
                         />
                         {friendlyMessage(importError)}
                       </p>
-                      {(importError.code === 'missing_key' ||
-                        importError.code === 'invalid_key' ||
-                        importError.code === 'rate_limit') && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSettingsOpen(true)}
-                        >
-                          <KeyRound
-                            className="mr-1.5 size-3.5"
-                            aria-hidden="true"
-                          />
-                          Open Settings
-                        </Button>
-                      )}
                       {importError.code === 'unsupported' && (
                         <Button
                           variant="outline"
@@ -547,20 +517,7 @@ export default function Upload() {
                     <Sparkles className="mr-2 size-4" aria-hidden="true" />
                     Generate Cards
                   </LoadingButton>
-                  {noKeys && (
-                    <p className="text-xs text-muted-foreground">
-                      No API key yet —{' '}
-                      <button
-                        type="button"
-                        className="underline hover:text-foreground"
-                        onClick={() => setSettingsOpen(true)}
-                      >
-                        open Settings
-                      </button>{' '}
-                      to add one.
-                    </p>
-                  )}
-                  {!noKeys && !notes.trim() && (
+                  {!notes.trim() && (
                     <p className="text-xs text-muted-foreground">
                       Paste some notes to generate cards.
                     </p>
@@ -633,23 +590,9 @@ export default function Upload() {
                       {friendlyMessage(genError)}
                     </p>
                     <div className="flex gap-2">
-                      {(genError.code === 'missing_key' ||
-                        genError.code === 'invalid_key' ||
-                        genError.code === 'rate_limit') && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSettingsOpen(true)}
-                        >
-                          <KeyRound
-                            className="mr-1.5 size-3.5"
-                            aria-hidden="true"
-                          />
-                          Open Settings
-                        </Button>
-                      )}
                       {(genError.code === 'network' ||
-                        genError.code === 'unavailable') && (
+                        genError.code === 'server_error' ||
+                        genError.code === 'provider_failure') && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -798,8 +741,6 @@ export default function Upload() {
           </section>
         </div>
       </div>
-
-      <SettingsDialog open={settingsOpen} onOpenChange={handleSettingsChange} />
     </div>
   )
 }

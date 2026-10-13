@@ -17,8 +17,8 @@ A free-tier flashcard app: paste or import your study material (PDF, images, doc
 
 - **Auth** — email/password sign-in via Supabase Auth (RLS-protected data)
 - **Decks** — create and delete decks; cards live inside decks. (Renaming a deck has **no UI yet** — the hook exists but the feature is deliberately unimplemented, tracked as U-08 in `USABILITY_AUDIT.md`.)
-- **AI card generation** — paste notes → 10–15 flashcards, editable before saving. Provider chain: **Google Gemini (`gemini-3.8-flash`) → Groq (`openai/gpt-oss-120b`) → Cerebras**, so hitting one free-tier limit falls through to the next
-- **Material import** — drop or pick a file on the Generate Cards page: **PDF** (text extracted locally in the browser with pdf.js), **images** (screenshots/photos of pages transcribed by your Gemini key), **`.docx`** (mammoth), or **`.txt`/`.md`** — imported text lands in the notes box for you to trim before generating
+- **AI card generation** — paste notes → 10–15 flashcards, editable before saving. Runs server-side (Supabase Edge Function): **Groq (`openai/gpt-oss-120b`) → Cerebras (`gpt-oss-120b`) → Gemini (`gemini-3.8-flash`)**, 20 generations per user per UTC day. No API key needed in the app
+- **Material import** — drop or pick a file on the Generate Cards page: **PDF** (text extracted locally in the browser with pdf.js), **`.docx`** (mammoth), or **`.txt`/`.md`** — imported text lands in the notes box for you to trim before generating. Image (screenshot/photo) import is paused until transcription moves server-side
 - **Reviews** — one card at a time, rated Again / Hard / Good / Easy, scheduled by **FSRS** (`ts-fsrs`)
 - **Analytics** — retention rate, total reviews, current streak, cards learned, highlights (due today, streak, weakest deck), a week-over-week activity trend, a 7-day due forecast (bar chart), 14-day review activity (line chart), a rating breakdown, and weakest decks by accuracy with progress bars
 - **Polish** — loading skeletons, empty states everywhere, global error boundary, mobile-first responsive layout
@@ -72,17 +72,21 @@ React 19 + Vite 8 · Tailwind CSS v4 (CSS-first, no `tailwind.config.js`) · sha
 
 > The anon key is safe to expose in the client — RLS is what protects the data.
 
-## AI provider setup (free tiers)
+## AI provider setup (free tiers, server-side)
 
-Open the app → **Settings** (Dashboard or Upload page) and paste one or more keys. Keys are stored **only in your browser's localStorage** and are sent only to that provider's own endpoint — never to Supabase or any other server.
+Card generation runs in the Supabase Edge Function `generate-cards` — **no API key is needed in the app**. Set the provider keys as function secrets (server-only, never shipped to the browser):
+
+```bash
+supabase secrets set GROQ_API_KEY=... CEREBRAS_API_KEY=... GEMINI_API_KEY=...
+```
 
 | Provider | Key source | Used |
 | --- | --- | --- |
-| Gemini (`gemini-3.8-flash`) | [Google AI Studio](https://aistudio.google.com/apikey) | First choice |
-| Groq GPT-OSS 120B (`openai/gpt-oss-120b`) | [console.groq.com/keys](https://console.groq.com/keys) | Fallback |
-| Cerebras Llama 3.3 70B | [cloud.cerebras.ai](https://cloud.cerebras.ai) | Last fallback |
+| Groq GPT-OSS 120B (`openai/gpt-oss-120b`) | [console.groq.com/keys](https://console.groq.com/keys) | First choice |
+| Cerebras GPT-OSS 120B (`gpt-oss-120b`) | [cloud.cerebras.ai](https://cloud.cerebras.ai) | Fallback |
+| Gemini (`gemini-3.8-flash`) | [Google AI Studio](https://aistudio.google.com/apikey) | Last fallback |
 
-A single Gemini key is enough; adding the others keeps generation working when a free-tier rate limit kicks in.
+Each signed-in user gets **20 AI generations per UTC day** (server-enforced; tunable via `AI_DAILY_LIMIT`). File import (PDF/DOCX/TXT/MD) is parsed locally in the browser and needs no key. Image (screenshot/photo) import is paused until transcription moves server-side.
 
 ## Keeping Supabase awake (free-tier pause)
 
@@ -124,7 +128,7 @@ Either way, any hit within the activity window keeps the project awake. Also sig
    - `VITE_SUPABASE_ANON_KEY`
 4. **Deploy.** Build command `npm run build`, output directory `dist` (defaults).
 5. In **Supabase → Authentication → URL Configuration**, add your Vercel domain to *Site URL* and *Redirect URLs* (`https://your-app.vercel.app`).
-6. Verify in production: sign up → create a deck → generate cards (Settings key) → run a review → open Analytics.
+6. Verify in production: sign up → create a deck → generate cards (no key needed) → run a review → open Analytics.
 
 ## Security
 
@@ -149,8 +153,8 @@ The short version:
   localStorage and are sent only to their provider. No service-role key exists
   in this repo — never add one to a `VITE_*` variable.
 - **Input limits:** deck/card/notes fields are length-capped in the UI *and*
-  by database `CHECK` constraints; imports are size-capped (10 MB images,
-  25 MB documents); AI output is count/length-capped before saving.
+  by database `CHECK` constraints; imports are size-capped (25 MB documents);
+  AI output is count/length-capped before saving.
 - **Errors:** production builds show friendly copy only — raw database/API
   messages render in development builds for debugging.
 - Supabase Free has **no automatic backups** — export your data periodically
@@ -161,7 +165,7 @@ The short version:
 | Service | Limit | Avoidance |
 | --- | --- | --- |
 | Supabase Free | 500 MB DB, pauses after ~7 days idle | Text-only cards (~1 KB each); cron ping above |
-| Gemini / Groq / Cerebras | Per-minute/daily request caps | Built-in fallback chain + own-keys-in-localStorage rotation |
+| Gemini / Groq / Cerebras | Per-minute/daily request caps | Server-side fallback chain + 20/day per-user quota |
 | Vercel Hobby | Non-commercial use, fair-use bandwidth | Static build, no server functions needed |
 | cron-job.org | Free tier allows several jobs | One job every 5 days is plenty |
 
@@ -172,10 +176,10 @@ No paid services are used anywhere in this project.
 ```
 src/
   pages/        Auth, Dashboard, Decks (+ DeckList content), DeckDetail,
-                Review, Upload, Analytics, Settings (+ SettingsPage)
+                Review, Upload, Analytics
   hooks/        useAuth, useDecks, useCards, useReviews, useAnalytics
-  lib/          supabase client, fsrs wrapper, ai provider chain, file
-                extraction, nav/ratings/theme configs, error + auth-form mapping
+  lib/          supabase client, fsrs wrapper, edge-function client,
+                file extraction, nav/ratings/theme configs, error + auth-form mapping
   components/   AppShell + nav, review set, upload set, shared states,
                 ui/ (shadcn primitives)
 supabase/
@@ -242,9 +246,9 @@ verification is lint + build + scripted smoke checks + audits:
 
 | Symptom | Fix |
 | --- | --- |
-| "Could not find the table 'public.decks' in the schema cache" | Run `supabase/schema.sql` in the SQL Editor; confirm `.env`/Vercel vars point at that project; reload the schema cache (Dashboard → Settings → API → Reload schema). |
+| "Could not find the table 'public.decks' in the schema cache" | Run `supabase/schema.sql` in the SQL Editor; confirm `.env`/Vercel vars point at that project; reload the schema cache (Supabase Dashboard → Settings → API → Reload schema). |
 | App says "isn't configured yet" | Production build was made without `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` — set them in Vercel and redeploy. |
-| AI generation says rate-limited | Normal on free tiers — add fallback keys (Groq/Cerebras) in Settings, or wait for the quota reset. Gemini-only image import has no fallback. |
+| AI generation says daily limit reached | 20 generations per user per UTC day, server-enforced — try again tomorrow (tunable via `AI_DAILY_LIMIT` on the Edge Function). |
 | Supabase project paused | Free tier pauses after ~7 days idle — use the cron ping above. |
 | `.env` changes not picked up | Restart `npm run dev` (Vite reads `.env` at startup). |
 | CSP blocks a new third-party service | Add its origin to `connect-src`/`script-src` in `vercel.json` **before** enabling it. |

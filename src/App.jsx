@@ -15,7 +15,6 @@ const Analytics = lazy(() => import('@/pages/Analytics'))
 const DeckDetail = lazy(() => import('@/pages/DeckDetail'))
 const Decks = lazy(() => import('@/pages/Decks'))
 const Review = lazy(() => import('@/pages/Review'))
-const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const Upload = lazy(() => import('@/pages/Upload'))
 
 function FullPageMessage({ children }) {
@@ -72,7 +71,6 @@ export default function App() {
           <Route path="/decks/:id" element={<DeckDetail />} />
           <Route path="/upload" element={<Upload />} />
           <Route path="/analytics" element={<Analytics />} />
-          <Route path="/settings" element={<SettingsPage />} />
         </Route>
         {/* Review focus mode: bare layout, own minimal header only. Its
             boundary is per-route because it sits outside AppShell. */}

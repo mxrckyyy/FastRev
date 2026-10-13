@@ -13,7 +13,7 @@ import { NAV_ITEMS, sidebarLinkClass } from '@/lib/nav'
 
 /**
  * Hamburger menu for small screens: the full navigation list (including
- * Analytics and Settings, which don't fit in the bottom bar) plus sign-out.
+ * Analytics, which doesn't fit in the bottom bar) plus sign-out.
  * Reuses the shadcn Dialog, so Radix provides the focus trap, Escape-to-
  * close and labelled dialog semantics.
  */

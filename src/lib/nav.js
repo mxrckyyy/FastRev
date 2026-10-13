@@ -2,7 +2,7 @@
 // and top-bar titles all read from here, so adding a destination means adding
 // one entry (plus a route in App.jsx).
 
-import { ChartColumn, LayoutDashboard, Layers, Play, Settings, Sparkles } from 'lucide-react'
+import { ChartColumn, LayoutDashboard, Layers, Play, Sparkles } from 'lucide-react'
 import { cn } from 'cn'
 
 export const NAV_ITEMS = [
@@ -11,7 +11,6 @@ export const NAV_ITEMS = [
   { id: 'review', to: '/review', label: 'Review', icon: Play },
   { id: 'upload', to: '/upload', label: 'Upload', icon: Sparkles },
   { id: 'analytics', to: '/analytics', label: 'Analytics', icon: ChartColumn },
-  { id: 'settings', to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 // The bottom bar shows the four core destinations; everything else lives in
@@ -27,7 +26,6 @@ const ROUTE_TITLES = {
   '/review': 'Review',
   '/upload': 'Upload',
   '/analytics': 'Analytics',
-  '/settings': 'Settings',
 }
 
 /**

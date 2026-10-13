@@ -1,24 +1,12 @@
-import { loadApiKeys, transcribeImage } from './ai'
 // legacy build: works in browsers AND Node (pdfjs warns the modern build is browser-only)
 import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 
-export const SUPPORTED_INPUTS =
-  'PDF, image (screenshots, slides, photos of pages), .txt, .md, .docx'
+export const SUPPORTED_INPUTS = 'PDF, .txt, .md, .docx'
 
 function inputError(code, message) {
   const error = new Error(message)
   error.code = code
   return error
-}
-
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  const chunkSize = 0x8000
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(index, index + chunkSize))
-  }
-  return btoa(binary)
 }
 
 async function extractPdf(file) {
@@ -45,17 +33,6 @@ async function extractPdf(file) {
   }
 }
 
-async function extractImage(file) {
-  const buffer = await file.arrayBuffer()
-  const data = arrayBufferToBase64(buffer)
-  const mimeType = file.type || 'image/png'
-  const text = await transcribeImage(
-    { mimeType, data },
-    loadApiKeys(),
-  )
-  return { text, kind: 'image', meta: '' }
-}
-
 async function extractDocx(file) {
   const mammoth = await import('mammoth')
   const extractRawText = mammoth.extractRawText || mammoth.default?.extractRawText
@@ -72,20 +49,15 @@ async function extractDocx(file) {
 
 /**
  * Extract plain study text from a user-supplied file.
- * PDFs are parsed locally (pdfjs); images are transcribed via the user's
- * Gemini key; .txt/.md read directly; .docx via mammoth.
+ * PDFs are parsed locally (pdfjs); .txt/.md read directly; .docx via
+ * mammoth. No file content ever leaves the browser during import —
+ * generation happens server-side only after the user presses Generate.
  * Returns { text, kind, meta } — throws an Error with `.code` on failure.
  */
 export async function extractFromFile(file) {
   const name = (file.name || '').toLowerCase()
   if (file.type === 'application/pdf' || name.endsWith('.pdf')) {
     return extractPdf(file)
-  }
-  if (
-    file.type.startsWith('image/') ||
-    /\.(png|jpe?g|webp|heic|heif)$/.test(name)
-  ) {
-    return extractImage(file)
   }
   if (name.endsWith('.docx')) {
     return extractDocx(file)

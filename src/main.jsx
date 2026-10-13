@@ -8,6 +8,20 @@ import App from './App.jsx'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import { AuthProvider } from '@/hooks/useAuth'
 
+// One-time purge of obsolete client-side provider keys. Generation and job
+// scheduling are server-side now, so keys the app stored in Phase 4 and
+// earlier (`gemini_api_key`, `groq_api_key`, `cerebras_api_key`) are useless
+// — leaving them in browsers would keep secrets at rest for no reason.
+// Runs once per bundle load; theme storage (`fastrev_theme`) is unrelated
+// and untouched.
+try {
+  localStorage.removeItem('gemini_api_key')
+  localStorage.removeItem('groq_api_key')
+  localStorage.removeItem('cerebras_api_key')
+} catch {
+  // localStorage unavailable (private mode) — nothing stored, nothing to purge.
+}
+
 // Global toast host. `unstyled` turns off sonner's hardcoded white/black
 // surface so every visual comes from our tokens instead (bg-elevated,
 // border-border, text-sm, rounded-xl — the same vocabulary as dialogs and

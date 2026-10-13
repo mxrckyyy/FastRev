@@ -1,5 +1,4 @@
-import { Link } from 'react-router-dom'
-import { LogOut, Settings } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -23,9 +22,9 @@ function Avatar({ email }) {
   )
 }
 
-// Only actions that actually exist in the app: Settings (route) and Sign out
-// (the existing useAuth().signOut). The email is shown as a label, not an
-// action — there is no profile page to link to.
+// Only actions that actually exist in the app: Sign out (the existing
+// useAuth().signOut). The email is shown as a label, not an action — there
+// is no profile page to link to.
 function MenuItems() {
   const { user, signOut } = useAuth()
   return (
@@ -34,12 +33,6 @@ function MenuItems() {
         <span className="block truncate">{user?.email || 'Signed in'}</span>
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
-      <DropdownMenuItem asChild>
-        <Link to="/settings">
-          <Settings aria-hidden="true" />
-          Settings
-        </Link>
-      </DropdownMenuItem>
       <DropdownMenuItem onSelect={() => signOut()}>
         <LogOut aria-hidden="true" />
         Sign out
