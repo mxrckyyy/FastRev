@@ -109,26 +109,39 @@ export interface FinalizeOutcome {
  * SQL function enforces slot ownership, so a wrong id/user can never move
  * quota. Callers log-and-continue on false: a ledger hiccup must not fail
  * an already-generated user response.
+ *
+ * `maxAttempts` bounds retries of TRANSIENT failures (transport errors, not
+ * already-finalized no-ops, which return false immediately per attempt but
+ * cost nothing). Default 1 preserves single-attempt semantics; the handler
+ * passes 2 so one blip does not silently under-count a success.
  */
 export async function finalizeSlot(
   db: QuotaDb,
   slot: { slotId: string; userId: string },
   outcome: FinalizeOutcome,
+  maxAttempts = 1,
 ): Promise<boolean> {
-  try {
-    const { data, error } = await db.rpc("finalize_ai_generation_slot", {
-      p_slot_id: slot.slotId,
-      p_user_id: slot.userId,
-      p_status: outcome.status,
-      p_tokens: outcome.tokens,
-      p_provider: outcome.provider,
-      p_cards: outcome.cards,
-    });
-    if (error) return false;
-    return data === true;
-  } catch {
-    return false;
+  const attempts = Math.max(1, Math.floor(maxAttempts));
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const { data, error } = await db.rpc("finalize_ai_generation_slot", {
+        p_slot_id: slot.slotId,
+        p_user_id: slot.userId,
+        p_status: outcome.status,
+        p_tokens: outcome.tokens,
+        p_provider: outcome.provider,
+        p_cards: outcome.cards,
+      });
+      if (!error && data === true) return true;
+      // Definitive no-op (already finalized / foreign slot returns
+      // data === false with no error): retrying cannot change it.
+      if (!error) return false;
+      // SQL error: possibly transient — fall through to retry.
+    } catch {
+      // Transport failure — retry while attempts remain.
+    }
   }
+  return false;
 }
 
 /** Friendly copy for 429s. The numeric limit is user-facing (not privileged). */

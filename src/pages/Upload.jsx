@@ -66,6 +66,9 @@ function friendlyMessage(error) {
       return 'That\u2019s too much text at once. Trim the notes and try again.'
     case 'too_big':
       return error?.message || 'That file is too large to import.'
+    case 'invalid_json':
+    case 'invalid_method':
+      return 'Something went wrong while generating cards.'
     case 'missing_notes':
       return 'Add some study notes first, then generate.'
     case 'missing_auth':

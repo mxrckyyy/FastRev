@@ -3,7 +3,7 @@
 ## High-Level Flow
 1. User authenticates via Supabase Auth.
 2. User creates a deck (course).
-3. User pastes or imports notes (PDF / image / .docx / text) → AI generates atomic flashcards.
+3. User pastes or imports notes (PDF / .docx / text) → server-side AI generates atomic flashcards (quota-enforced).
 4. User reviews cards → FSRS schedules next review.
 5. Dashboard shows retention, weak topics, due cards.
 
@@ -365,7 +365,7 @@ A read-only inspection of the real code (no assumption from phase docs) covering
 Evidence-based optimization pass; full detail + lab data in `PERFORMANCE_AUDIT.md` (baseline was written before any code changed).
 
 ### What changed
-- **Route-level code splitting** — `App.jsx` lazy-imports Analytics, Upload, SettingsPage, Decks, DeckDetail and Review; **Auth, Dashboard and AppShell stay eager** (they are the first-paint path for both landing states: guest → `/auth`, signed-in → `/dashboard`). A new page must be lazy unless it is on that critical path.
+- **Route-level code splitting** — `App.jsx` lazy-imports Analytics, Upload, Decks, DeckDetail and Review (`SettingsPage` was lazy too until Phase 6 of the Edge Function track deleted the `/settings` route); **Auth, Dashboard and AppShell stay eager** (they are the first-paint path for both landing states: guest → `/auth`, signed-in → `/dashboard`). A new page must be lazy unless it is on that critical path.
 - **Suspense placement** — the shell's boundary sits *inside* AppShell's keyed fade div (`<Outlet/>` wrapped), so a chunk load never unmounts the chrome (no CLS, no nav flash); focus-mode `/review` carries its own boundary with the full-page loading message. Fallback = `RouteFallback` (the one spinner + sr-only status, reduced-motion aware).
 - **`useDecks` request dedupe** — module-level in-flight promise keyed by user id: AppShell + the mounted page used to fire the same two Supabase queries twice per load; concurrent callers now join one request. Only the *promise* is shared — results are never cached, so create/delete/refetch behavior is unchanged and a logout/login cannot join another user's request.
 - **Head/landmarks** — `index.html` meta description, `public/robots.txt` (SEO 82 → 100); `AuthView` (both variants) + `FullPageMessage` render `<main>` (a11y 98 → 100). Shell routes still own AppShell's single `<main>` — the alternatives never coexist.
@@ -578,13 +578,15 @@ Phase 12 adds (0002 migration, pending execution): ownership triggers
 (`assert_deck_owner` / `assert_card_owner`) + `NOT VALID` length CHECK constraints —
 see Security section above.
 
-### AI generation ledger & quota gate (0003 migration, pending execution)
+### AI generation ledger & quota gate (0003 → 0004 → 0005; all pending execution)
 - **Table** `ai_generations`: one row per generation request
   (`tokens_used` defaults to 0 — providers don't reliably return usage, so
   0 means "unknown"; `provider` records which fallback-chain member served
-  the request; `cards_generated` counts the cards kept). Index
+  the request; `cards_generated` counts the cards kept; `status` ∈
+  `reserved`/`completed`/`failed`/`expired`, added by 0004). Index
   `ai_generations_user_created_idx (user_id, created_at desc)` serves the
-  quota-count and usage-history queries. FK `user_id → auth.users`
+  quota-count and usage-history queries (user_id equality + created_at
+  range; no further index needed). FK `user_id → auth.users`
   `ON DELETE CASCADE`, matching every other table.
 - **Access rules**: `authenticated` gets exactly ONE policy —
   `ai_generations_select_own` (read own rows for usage history). There is
@@ -597,19 +599,27 @@ see Security section above.
   bypassed for that role) to record usage. The anon key in the frontend
   bundle can never write this table.
 - **Atomic quota gate**: `claim_ai_generation_slot(p_user_id, p_limit
-  DEFAULT 20, p_window_hours DEFAULT 24)` is `SECURITY DEFINER` and holds a
-  per-user transaction-scoped advisory lock
-  (`pg_advisory_xact_lock(hashtextextended(...))`) while it counts the
-  window and inserts the claim row — concurrent requests for one user
-  serialize, so a count-then-insert race can never overshoot the limit.
-  Over quota raises `AI_GENERATION_QUOTA_EXCEEDED` (SQLSTATE `P0001`),
-  which the Edge Function maps to HTTP 429. `EXECUTE` is revoked from
+  DEFAULT 20, p_attempt_limit DEFAULT 60, p_reservation_ttl_minutes
+  DEFAULT 10)` is `SECURITY DEFINER` and holds a per-user
+  transaction-scoped advisory lock
+  (`pg_advisory_xact_lock(hashtextextended(...))`) while it expires stale
+  reservations, counts, and inserts the claim row — concurrent requests for
+  one user serialize, so a count-then-insert race can never overshoot the
+  limit. **Fix Phase correction (0005):** the success gate counts HELD
+  slots (`completed` + active `reserved`) since UTC midnight — 0004 counted
+  `completed` only, so a parallel burst could overshoot (~59 vs limit 20).
+  Every claim occupies one slot until it finalizes; failure/`expired`
+  releases it. The attempt ceiling (`reserved`+`completed`+`failed`) is the
+  unchanged abuse backstop. Over quota raises `AI_GENERATION_QUOTA_EXCEEDED`
+  (SQLSTATE `P0001`), over attempts `AI_GENERATION_ATTEMPT_LIMIT`, which the
+  Edge Function maps to HTTP 429. `EXECUTE` is revoked from
   `public`/`anon`/`authenticated` and granted only to `service_role`, so
   clients cannot call it directly with an arbitrary user id. Flow: claim
-  BEFORE the provider call (no wasted quota) → on success the Edge
-  Function `UPDATE`s the claimed row with real
-  `tokens_used`/`provider`/`cards_generated`; failed attempts stay as
-  zero-token rows and still count (conservative against retry-abuse).
+  BEFORE the provider call (lock commits before the slow network call —
+  never held across it) → success finalizes `completed` with real
+  `tokens_used`/`provider`/`cards_generated` (retried once on transient
+  failure, then logged) → provider failure finalizes `failed` (releases
+  success quota, keeps attempt pressure).
 
 ## External Services
 - Supabase (DB, Auth, RLS, pgvector + Edge Functions)
@@ -640,6 +650,17 @@ see Security section above.
   it depended on the user's Gemini key for OCR. Text imports are
   unaffected. Restoring it means a server-side transcription endpoint
   using the function secret (follow-up, not built here).
+- **Phase 7 verification (2026-10-13, this environment):** `oxlint` clean
+  (1 tolerated pre-existing warning) · `vite build` ✓ (7.68 s) · all six
+  phase suites re-run green against current files (119 unit checks; 148
+  static checks, with 9 older assertions retired as superseded by later
+  phases — see the Phase 7 report) · `dist/` secret scan clean (only `localStorage.removeItem`
+  purge literals match `*_api_key`) · deploy-config audit 31/31
+  (dual-layer JWT, env-docs hygiene, migration order/idempotency,
+  service-role-only RPCs, 11-code contract consistency, quota-20
+  consistency, CSP). **NOT deployed, NOT live-tested** — no CLI/DB
+  credentials here; the runbook above is the user's procedure
+  (`supabase/README.md` § Deploy).
 - Files: `supabase/functions/generate-cards/index.ts` (Deno.serve handler),
   `providers.ts` (live chain Groq `openai/gpt-oss-120b` → Cerebras
   `gpt-oss-120b` → Gemini `gemini-3.8-flash`; model IDs verified against
@@ -684,9 +705,82 @@ see Security section above.
 4. `useReviews.js` updates the card row + inserts a `review_logs` row.
 5. UI advances to the next card in the queue.
 
+## AI Generation System (Final Architecture)
+
+Canonical flow, verified against source 2026-10-13 (Edge Function track
+Phases 0–7 — code-complete and build-green, **not yet deployed**):
+
+```
+User → React Upload.jsx (signed in, deck chosen, notes entered)
+  → supabase.functions.invoke('generate-cards', { body: { notes } })  [JWT]
+  → Edge Function (Deno.serve): gateway JWT check → auth.getUser()
+  → notes validation (non-empty, ≤ 5,000 words, ≤ 60,000 chars)
+  → atomic UTC-day quota claim (20 successes/day, 60-attempt ceiling)
+  → Groq openai/gpt-oss-120b → Cerebras gpt-oss-120b → Gemini gemini-3.8-flash
+  → server-side card validation → 200 { cards, provider } → finalize slot
+  → frontend preview / edit / select → useCards.createCard → cards table (RLS)
+```
+
+- **Authentication (dual layer, consistent):** gateway `verify_jwt = true`
+  (`supabase/config.toml` — never disabled) rejects unauthenticated calls
+  before the handler; the handler re-validates the bearer via
+  `supabase.auth.getUser()` (anon key) and uses only the verified `user.id`
+  — body-supplied ids are never trusted. 401 `missing_auth`/`invalid_token`,
+  403 `origin_not_allowed` (exact-match `ALLOWED_ORIGINS`; unset = localhost
+  dev only).
+- **Provider fallback:** each configured provider is tried at most once, in
+  order; every provider-side failure (network, 30 s timeout, 429, 503/529/
+  504, bad key, malformed/unusable output) falls through to the next;
+  first usable card set wins; no retries, no backoff. All-fail → 502
+  `provider_failure` with generic copy. Model IDs verified against live
+  provider docs 2026-10-13 (see `providers.ts`); a retired model surfaces
+  as a silent 404 fallthrough — re-check the docs first when a provider
+  stops serving.
+- **Errors:** uniform `{ error: { code, message } }`, 11 codes
+  (`response.ts`); the client allowlists server codes and falls back to
+  status mapping, handling every known SDK wrap shape (returned vs thrown);
+  raw provider internals never reach the screen. Client timeout 95 s → `network`.
+- **Quota:** reservation-and-finalization on `ai_generations` (migrations
+  0004 → 0005): claim `reserved` BEFORE provider spend under a per-user
+  advisory lock (concurrent requests serialize; the success gate counts
+  HELD slots = `completed` + active `reserved`, so parallel bursts stop at
+  the limit — 0005 fixed 0004's completed-only gate) → success finalizes
+  `completed` with real usage (null stays "unknown"; one retry on transient
+  failure, then log-and-continue: fail-open accounting, fail-safe UX) →
+  provider failure finalizes `failed` (releases success quota, keeps
+  attempt-ceiling pressure) → abandoned reservations expire after the TTL
+  and are lazily marked `expired` (no cron). The limit counts successes per
+  UTC calendar day (boundary computed in UTC on both sides); over-quota is
+  `429 quota_exceeded` with friendly copy. Limits are server env
+  (`AI_DAILY_LIMIT` 20 / `AI_ATTEMPT_LIMIT` 60 /
+  `AI_RESERVATION_TTL_MINUTES` 10), never browser-visible.
+- **Security:** provider keys exist ONLY as function secrets (`supabase
+  secrets set` — never in code, docs, or Vite env); `service_role` is used
+  solely for the two ledger RPCs (both revoked from
+  `public`/`anon`/`authenticated`); the ledger is RLS read-own with zero
+  write policies; the browser holds no provider credentials (CSP
+  `connect-src` forbids provider origins; `dist/` scans clean); the anon
+  key is public-by-design behind RLS. Key rotation: no real key was ever
+  committed (history holds only `AIza…`/`gsk_…` placeholders); pasted user
+  keys lived only in their own browsers and are purged on app load — rotate
+  at the provider console only if a key was ever shared.
+- **Setup & deploy:** `supabase/README.md` § Deploy is the runbook (CLI
+  install/login/link → migrations 0001→0005 in SQL Editor → secrets →
+  `functions deploy generate-cards` → live verification matrix → frontend
+  build + Vercel deploy). Its commands are standard Supabase CLI; confirm
+  against `supabase --version` (the CLI was not installed in the build
+  environment, so no version is pinned here).
+- **Not done / not claimed:** live deploy, live verification, and
+  migrations 0002–0004 execution (no credentials here); image import paused
+  until a server-side OCR endpoint exists; no fake/test paths remain in the
+  function (unconfigured secrets answer an explicit 501).
+
 ## File Extension Rules
 - React components: `.jsx`
 - Hooks, libs, utilities: `.js`
 - Config: `vite.config.js`, `tailwind.config.js` (if needed)
-- NO `.ts` or `.tsx` files in this project.
+- NO `.ts` or `.tsx` files in the Vite app (`src/`, configs).
+- `supabase/functions/` is Deno TypeScript by Supabase convention
+  (`index.ts`, `providers.ts`, `quota.ts`, `response.ts`, `validation.ts`) —
+  the only `.ts` in the repo; never imported by the Vite app.
 - `ts-fsrs` is an external npm package (compiled JS) — safe to import from `.js`.

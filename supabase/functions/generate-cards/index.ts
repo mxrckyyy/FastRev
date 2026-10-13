@@ -171,12 +171,13 @@ async function handler(req: Request): Promise<Response> {
     );
     // Release the reservation: a provider failure must not consume the
     // user's success quota (it still counts toward the attempt ceiling).
+    // Two attempts: one transport blip must not strand the slot until TTL.
     const released = await finalizeSlot(admin, slot, {
       status: "failed",
       tokens: null,
       provider: null,
       cards: 0,
-    });
+    }, 2);
     if (!released) {
       console.error("generate-cards: failed to release reservation", { userId });
     }
@@ -190,13 +191,16 @@ async function handler(req: Request): Promise<Response> {
 
   // Finalize the reservation with real usage (null tokens = provider did
   // not report any → row keeps 0 "unknown"). A ledger hiccup here must not
-  // fail an already-generated response: log and continue.
+  // fail an already-generated response: retry once, then log and continue.
+  // (Trade-off, documented: prolonged DB outage under-counts successes —
+  // fail-open accounting, fail-safe UX. The reservation then expires via
+  // TTL instead of counting. Alert on repeated finalize failures.)
   const finalized = await finalizeSlot(admin, slot, {
     status: "completed",
     tokens: result.usage?.total ?? null,
     provider: result.provider,
     cards: result.cards.length,
-  });
+  }, 2);
   if (!finalized) {
     console.error("generate-cards: failed to finalize reservation", { userId });
   }

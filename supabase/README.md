@@ -44,14 +44,17 @@ the server role only). Safe to re-run. Verify with the commented queries at
 the bottom of the file — and note the remote database is only updated once
 YOU run it; committing the file does not apply it.
 
-### Edge Function track — quota finalization (Phase 4)
+### Edge Function track — quota finalization (Phase 4, corrected by Fix Phase)
 
 Apply [`migrations/0004_ai_generation_quota.sql`](./migrations/0004_ai_generation_quota.sql)
-the same way, AFTER 0003. It adds the `status` ledger column
-(`reserved`/`completed`/`failed`/`expired`), upgrades the claim function to
-success-counted UTC-day quota + attempt ceiling + TTL expiry, and adds
-`finalize_ai_generation_slot()` (both functions service-role-only). Safe to
-re-run; verification queries are commented at the bottom of the file.
+then [`migrations/0005_quota_slot_accounting.sql`](./migrations/0005_quota_slot_accounting.sql)
+in the same way, AFTER 0003. Together they add the `status` ledger column
+(`reserved`/`completed`/`failed`/`expired`), the success-counted UTC-day
+quota + attempt ceiling + TTL expiry, and `finalize_ai_generation_slot()`
+(both functions service-role-only). 0005 corrects 0004's success gate to
+count held slots (`completed` + active `reserved`) so parallel bursts stop
+at the limit — same function signature, no caller changes. Safe to re-run;
+verification queries are commented at the bottom of each file.
 
 ## 3. Verify the tables were created
 
@@ -110,3 +113,48 @@ does not create it in dev.
 - Local: restart `npm run dev` (Vite only reads `.env` at startup).
 - Vercel: no redeploy needed for schema changes — the frontend reads tables at
   runtime. Only redeploy if you changed environment variables.
+
+## Deploy the generate-cards Edge Function (Phase 7 runbook)
+
+Prerequisites: Supabase CLI installed + logged in (`supabase login`), and
+the three provider secrets ready (at least one — the chain skips missing
+ones). **Nothing here is authorized to run itself**: every remote step below
+is yours to execute, in order. Never print secret values or put them in
+frontend (Vite) variables.
+
+1. **Link the project** (first time only) and confirm the target before any
+   remote operation:
+   ```bash
+   supabase link --project-ref YOUR-PROJECT-REF
+   supabase projects list   # confirm the ref matches Dashboard → Project Settings
+   ```
+2. **Apply migrations** (SQL Editor, in order — or `supabase db push` if the
+   project is linked; never `db reset` on a live project):
+   `0001_initial_schema.sql` → `0002_authorization_hardening.sql` →
+   `0003_ai_generations.sql` → `0004_ai_generation_quota.sql` →
+   `0005_quota_slot_accounting.sql`.
+   Run each file's commented verification block after applying.
+3. **Set secrets** (server-only; `verify_jwt` stays `true` in
+   `supabase/config.toml` — never disable it):
+   ```bash
+   supabase secrets set GROQ_API_KEY=... CEREBRAS_API_KEY=... GEMINI_API_KEY=...
+   supabase secrets set ALLOWED_ORIGINS=https://your-app.vercel.app
+   # Optional quota tuning (defaults 20 / 60 / 10):
+   # supabase secrets set AI_DAILY_LIMIT=20 AI_ATTEMPT_LIMIT=60 AI_RESERVATION_TTL_MINUTES=10
+   ```
+4. **Deploy** (function only — overwrites nothing else):
+   ```bash
+   supabase functions deploy generate-cards
+   ```
+5. **Verify live** (replace `$TOKEN` with a signed-in session's access token):
+   - No token → 401 `missing_auth`; bad token → 401 `invalid_token`.
+   - `{"notes":"..."}` → 200 `{ cards, provider }` (first success).
+   - 21st success same UTC day → 429 `quota_exceeded`.
+   - Cross-user check: user B's `select * from ai_generations` shows only B's
+     rows; direct `insert` as an authenticated user fails (no write policy).
+   - Browser DevTools → Application: no `*_api_key` values in storage;
+     Network: generation calls go only to
+     `https://YOUR-PROJECT.supabase.co/functions/v1/generate-cards`.
+6. **Ship the frontend**: `npm run build` (verified green in Phase 7) →
+   deploy `dist/` to Vercel with `VITE_SUPABASE_URL` /
+   `VITE_SUPABASE_ANON_KEY` set at build time.
